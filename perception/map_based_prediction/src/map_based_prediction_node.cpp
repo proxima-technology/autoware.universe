@@ -1502,12 +1502,6 @@ std::vector<PredictedRefPath> MapBasedPredictionNode::getPredictedReferencePath(
   const double acceleration_distance =
     filtered_obj_acc * (1.0 / λ) * prediction_time_horizon_ +
     filtered_obj_acc * (1.0 / std::pow(λ, 2)) * std::exp(-λ * prediction_time_horizon_);
-  std::cerr << "------------------------------------\n";
-  std::cerr << "object " << tier4_autoware_utils::toHexString(object.object_id) << "\n";
-  std::cerr << "acceleration_distance calculated " << acceleration_distance << "\n";
-  std::cerr << "obj_vel " << obj_vel << "\n";
-  std::cerr << "filtered_obj_acc " << filtered_obj_acc << "\n";
-  std::cerr << "prediction_time_horizon_ " << prediction_time_horizon_ << "\n";
 
   std::vector<PredictedRefPath> all_ref_paths;
   for (const auto & current_lanelet_data : current_lanelets_data) {
