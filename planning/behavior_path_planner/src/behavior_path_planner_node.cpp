@@ -49,7 +49,6 @@ using vehicle_info_util::VehicleInfoUtil;
 BehaviorPathPlannerNode::BehaviorPathPlannerNode(const rclcpp::NodeOptions & node_options)
 : Node("behavior_path_planner", node_options)
 {
-  std::cerr << "Constructing the node BehaviorPathPlannerNode0\n";
   using std::placeholders::_1;
   using std::chrono_literals::operator""ms;
 
@@ -59,7 +58,6 @@ BehaviorPathPlannerNode::BehaviorPathPlannerNode(const rclcpp::NodeOptions & nod
     planner_data_->parameters = getCommonParam();
     planner_data_->drivable_area_expansion_parameters.init(*this);
   }
-  std::cerr << "Constructing the node BehaviorPathPlannerNode1\n";
 
   // publisher
   path_publisher_ = create_publisher<PathWithLaneId>("~/output/path", 1);
@@ -75,8 +73,6 @@ BehaviorPathPlannerNode::BehaviorPathPlannerNode(const rclcpp::NodeOptions & nod
   debug_avoidance_msg_array_publisher_ =
     create_publisher<AvoidanceDebugMsgArray>("~/debug/avoidance_debug_message_array", 1);
 
-  std::cerr << "Constructing the node BehaviorPathPlannerNode2\n";
-
   if (planner_data_->parameters.visualize_maximum_drivable_area) {
     debug_maximum_drivable_area_publisher_ =
       create_publisher<MarkerArray>("~/maximum_drivable_area", 1);
@@ -87,7 +83,6 @@ BehaviorPathPlannerNode::BehaviorPathPlannerNode(const rclcpp::NodeOptions & nod
   bound_publisher_ = create_publisher<MarkerArray>("~/debug/bound", 1);
 
   const auto qos_transient_local = rclcpp::QoS{1}.transient_local();
-  std::cerr << "Constructing the node BehaviorPathPlannerNode3\n";
 
   // subscriber
   velocity_subscriber_ = create_subscription<Odometry>(
@@ -132,8 +127,6 @@ BehaviorPathPlannerNode::BehaviorPathPlannerNode(const rclcpp::NodeOptions & nod
     createSubscriptionOptions(this));
 
   {
-    std::cerr << "Constructing the node BehaviorPathPlannerNode4\n";
-
     const std::string path_candidate_name_space = "/planning/path_candidate/";
     const std::string path_reference_name_space = "/planning/path_reference/";
 
@@ -141,7 +134,6 @@ BehaviorPathPlannerNode::BehaviorPathPlannerNode(const rclcpp::NodeOptions & nod
 
     const auto & p = planner_data_->parameters;
     planner_manager_ = std::make_shared<PlannerManager>(*this, p.max_iteration_num, p.verbose);
-    std::cerr << "Constructing the node BehaviorPathPlannerNode5\n";
 
     for (const auto & name : declare_parameter<std::vector<std::string>>("launch_modules")) {
       // workaround: Since ROS 2 can't get empty list, launcher set [''] on the parameter.
