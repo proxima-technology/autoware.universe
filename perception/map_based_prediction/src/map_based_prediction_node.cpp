@@ -1455,7 +1455,7 @@ void MapBasedPredictionNode::updateObjectsHistory(
   single_object_data.pose.orientation = tier4_autoware_utils::createQuaternionFromYaw(object_yaw);
   single_object_data.time_delay = std::fabs((this->get_clock()->now() - header.stamp).seconds());
   single_object_data.twist = object.kinematics.twist_with_covariance.twist;
-
+  single_object_data.acceleration = object.kinematics.acceleration_with_covariance.accel;
   // Init lateral kinematics
   for (const auto & current_lane : current_lanelets) {
     const LateralKinematicsToLanelet lateral_kinematics =
@@ -1479,6 +1479,27 @@ void MapBasedPredictionNode::updateObjectsHistory(
   }
 }
 
+double MapBasedPredictionNode::getFilteredAcceleration(const TrackedObject & object)
+{
+  constexpr double smoothing_factor_ = 0.5;  // TODO (Daniel): make a parameter
+  const double current_acceleration = std::hypot(
+    object.kinematics.acceleration_with_covariance.accel.linear.x,
+    object.kinematics.acceleration_with_covariance.accel.linear.y);
+
+  const auto uuid = tier4_autoware_utils::toHexString(object.object_id);
+  const std::string object_id = tier4_autoware_utils::toHexString(object.object_id);
+  if (objects_history_.count(object_id) == 0) {
+    return current_acceleration;
+  }
+  const auto & object_info = objects_history_.at(object_id).back();
+
+  const double prev_acceleration =
+    std::hypot(object_info.acceleration.linear.x, object_info.acceleration.linear.y);
+  const double filtered_acceleration =
+    smoothing_factor_ * current_acceleration + (1.0 - smoothing_factor_) * prev_acceleration;
+  return filtered_acceleration;
+}
+
 std::vector<PredictedRefPath> MapBasedPredictionNode::getPredictedReferencePath(
   const TrackedObject & object, const LaneletsData & current_lanelets_data,
   const double object_detected_time)
@@ -1488,7 +1509,7 @@ std::vector<PredictedRefPath> MapBasedPredictionNode::getPredictedReferencePath(
     object.kinematics.twist_with_covariance.twist.linear.y);
 
   // Use a filtered-decaying acceleration model
-  const double filtered_obj_acc = object_acceleration_monitor_.getFilteredAcceleration(object);
+  const double filtered_obj_acc = getFilteredAcceleration(object);
   const double exponential_half_life = prediction_time_horizon_ / 2.0;
   // The decay constant λ = ln(2) / exponential_half_life
   const double λ = std::log(2) / exponential_half_life;

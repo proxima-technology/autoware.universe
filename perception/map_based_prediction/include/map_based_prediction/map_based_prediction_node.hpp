@@ -68,6 +68,7 @@ struct ObjectData
   lanelet::ConstLanelets future_possible_lanelets;
   geometry_msgs::msg::Pose pose;
   geometry_msgs::msg::Twist twist;
+  geometry_msgs::msg::Accel acceleration;
   double time_delay;
   // for lane change prediction
   std::unordered_map<lanelet::ConstLanelet, LateralKinematicsToLanelet> lateral_kinematics_set;
@@ -239,37 +240,7 @@ private:
     const TrackedObject & object, const LaneletData & current_lanelet_data,
     const double object_detected_time);
 
-  struct ObjectAccelerationMonitor
-  {
-    std::vector<TrackedObject> tracked_objects_;
-    double smoothing_factor_ = 0.5;
-
-    double getFilteredAcceleration(const TrackedObject & object)
-    {
-      const double current_acceleration = std::hypot(
-        object.kinematics.acceleration_with_covariance.accel.linear.x,
-        object.kinematics.acceleration_with_covariance.accel.linear.y);
-
-      const auto uuid = tier4_autoware_utils::toHexString(object.object_id);
-      const auto prev_object_info =
-        std::find_if(tracked_objects_.begin(), tracked_objects_.end(), [&](const auto & object) {
-          return tier4_autoware_utils::toHexString(object.object_id) == uuid;
-        });
-
-      if (prev_object_info == tracked_objects_.end()) {
-        tracked_objects_.push_back(object);
-        return current_acceleration;
-      }
-      const double prev_acceleration = std::hypot(
-        prev_object_info->kinematics.acceleration_with_covariance.accel.linear.x,
-        prev_object_info->kinematics.acceleration_with_covariance.accel.linear.y);
-      const double filtered_acceleration =
-        smoothing_factor_ * current_acceleration + (1.0 - smoothing_factor_) * prev_acceleration;
-      *prev_object_info = object;
-      return filtered_acceleration;
-    }
-  };
-  ObjectAccelerationMonitor object_acceleration_monitor_;
+  double getFilteredAcceleration(const TrackedObject & object);
 };
 }  // namespace map_based_prediction
 
