@@ -241,6 +241,8 @@ private:
     const double object_detected_time);
 
   double getFilteredAcceleration(const TrackedObject & object);
+  double getDecayingAccelerationModelDistance(
+    const TrackedObject & object, const double time_horizon);
 };
 }  // namespace map_based_prediction
 

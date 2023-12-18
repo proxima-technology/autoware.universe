@@ -263,7 +263,7 @@ lanelet::ConstLanelets getLeftLineSharingLanelets(
   lanelet::ConstLanelets
     output_lanelets;  // create an empty container of type lanelet::ConstLanelets
 
-  // step1: look for lane sharing current left bound
+  // step1: look for lane sharing currehorizon_nt left bound
   lanelet::Lanelets left_lane_candidates =
     lanelet_map_ptr->laneletLayer.findUsages(current_lanelet.leftBound());
   for (auto & candidate : left_lane_candidates) {
@@ -1500,17 +1500,12 @@ double MapBasedPredictionNode::getFilteredAcceleration(const TrackedObject & obj
   return filtered_acceleration;
 }
 
-std::vector<PredictedRefPath> MapBasedPredictionNode::getPredictedReferencePath(
-  const TrackedObject & object, const LaneletsData & current_lanelets_data,
-  const double object_detected_time)
+double MapBasedPredictionNode::getDecayingAccelerationModelDistance(
+  const TrackedObject & object, const double time_horizon)
 {
-  const double obj_vel = std::hypot(
-    object.kinematics.twist_with_covariance.twist.linear.x,
-    object.kinematics.twist_with_covariance.twist.linear.y);
-
   // Use a filtered-decaying acceleration model
   const double filtered_obj_acc = getFilteredAcceleration(object);
-  const double exponential_half_life = prediction_time_horizon_ / 2.0;
+  const double exponential_half_life = time_horizon / 2.0;
   // The decay constant λ = ln(2) / exponential_half_life
   const double λ = std::log(2) / exponential_half_life;
 
@@ -1521,15 +1516,26 @@ std::vector<PredictedRefPath> MapBasedPredictionNode::getPredictedReferencePath(
   // acceleration_distance = filtered_obj_acc(1/λ) * t  + filtered_obj_acc(1/λ^2)e^(-λt)
 
   const double acceleration_distance =
-    filtered_obj_acc * (1.0 / λ) * prediction_time_horizon_ +
-    filtered_obj_acc * (1.0 / std::pow(λ, 2)) * std::exp(-λ * prediction_time_horizon_);
+    filtered_obj_acc * (1.0 / λ) * time_horizon +
+    filtered_obj_acc * (1.0 / std::pow(λ, 2)) * std::exp(-λ * time_horizon);
   std::cerr << "------------------------------------\n";
   std::cerr << "object " << tier4_autoware_utils::toHexString(object.object_id) << "\n";
   std::cerr << "acceleration_distance calculated " << acceleration_distance << "\n";
-  std::cerr << "obj_vel " << obj_vel << "\n";
   std::cerr << "filtered_obj_acc " << filtered_obj_acc << "\n";
-  std::cerr << "prediction_time_horizon_ " << prediction_time_horizon_ << "\n";
+  std::cerr << "time_horizon " << time_horizon << "\n";
+  return acceleration_distance;
+}
 
+std::vector<PredictedRefPath> MapBasedPredictionNode::getPredictedReferencePath(
+  const TrackedObject & object, const LaneletsData & current_lanelets_data,
+  const double object_detected_time)
+{
+  const double obj_vel = std::hypot(
+    object.kinematics.twist_with_covariance.twist.linear.x,
+    object.kinematics.twist_with_covariance.twist.linear.y);
+
+  const double acceleration_distance =
+    getDecayingAccelerationModelDistance(object, prediction_time_horizon_);
   std::vector<PredictedRefPath> all_ref_paths;
   for (const auto & current_lanelet_data : current_lanelets_data) {
     // parameter for lanelet::routing::PossiblePathsParams

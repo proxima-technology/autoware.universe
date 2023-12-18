@@ -113,6 +113,8 @@ private:
 
   FrenetPath generateFrenetPath(
     const FrenetPoint & current_point, const FrenetPoint & target_point, const double max_length);
+  FrenetPath generateFrenetPathWithDecayingAcceleration(
+    const FrenetPoint & current_point, const FrenetPoint & target_point, const double max_length);
   Eigen::Vector3d calcLatCoefficients(
     const FrenetPoint & current_point, const FrenetPoint & target_point, const double T);
   Eigen::Vector2d calcLonCoefficients(
