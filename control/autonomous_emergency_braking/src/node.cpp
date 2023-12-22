@@ -14,6 +14,8 @@
 
 #include "autonomous_emergency_braking/node.hpp"
 
+#include <tier4_autoware_utils/tier4_autoware_utils.hpp>
+
 #include <pcl/filters/voxel_grid.h>
 #include <tf2/utils.h>
 
@@ -355,25 +357,29 @@ bool AEB::hasCollision(
   const double current_v, const Path & ego_path, const std::vector<ObjectData> & objects)
 {
   // calculate RSS
-  const auto current_p = tier4_autoware_utils::createPoint(0.0, 0.0, 0.0);
+  const auto current_p = tier4_autoware_utils::createPoint(
+    ego_path[0].position.x, ego_path[0].position.y, ego_path[0].position.z);
   const double & t = t_response_;
   for (const auto & obj : objects) {
     const double & obj_v = obj.velocity;
     const double rss_dist = current_v * t + (current_v * current_v) / (2 * std::fabs(a_ego_min_)) -
                             obj_v * obj_v / (2 * std::fabs(a_obj_min_)) + longitudinal_offset_;
-    const double dist_ego_to_object =
-      tier4_autoware_utils::calcSignedArcLength(ego_path, current_p, obj.position) -
-      vehicle_info_.max_longitudinal_offset_m;
-    if (dist_ego_to_object < rss_dist) {
-      // collision happens
-      ObjectData collision_data = obj;
-      collision_data.rss = rss_dist;
-      collision_data.distance_to_object = dist_ego_to_object;
-      collision_data_keeper_.update(collision_data);
-      return true;
+
+    // check the object is front the ego or not
+    if ((obj.position.x - ego_path[0].position.x) > 0) {
+      const double dist_ego_to_object =
+        tier4_autoware_utils::calcSignedArcLength(ego_path, current_p, obj.position) -
+        vehicle_info_.max_longitudinal_offset_m;
+      if (dist_ego_to_object < rss_dist) {
+        // collision happens
+        ObjectData collision_data = obj;
+        collision_data.rss = rss_dist;
+        collision_data.distance_to_object = dist_ego_to_object;
+        collision_data_keeper_.update(collision_data);
+        return true;
+      }
     }
   }
-
   return false;
 }
 
