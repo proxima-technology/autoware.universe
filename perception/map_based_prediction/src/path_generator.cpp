@@ -187,9 +187,16 @@ PredictedPath PathGenerator::generatePolynomialPath(
   // Step1. Set Target Frenet Point
   // Note that we do not set position s,
   // since we don't know the target longitudinal position
+
+  // V(T) = Vo + obj_acc(1/λ)(1-e^(-λT))
+  const double T = time_horizon_;
+  const float exponential_half_life = T / 4.0;
+  const float λ = std::log(2) / exponential_half_life;
+  const double V_T = current_point.s_vel + current_point.s_acc * (1.0 / λ) * (1 - std::exp(-λ * T));
+
   FrenetPoint terminal_point;
-  terminal_point.s_vel = current_point.s_vel;
-  terminal_point.s_acc = 0.0;
+  terminal_point.s_vel = V_T;
+  terminal_point.s_acc = 0.0;  // We assume the acceleration has decayed to 0 by this point
   terminal_point.d = 0.0;
   terminal_point.d_vel = 0.0;
   terminal_point.d_acc = 0.0;
@@ -222,26 +229,35 @@ FrenetPath PathGenerator::generateFrenetPath(
   const Eigen::Vector2d lon_coeff = calcLonCoefficients(current_point, target_point, duration);
 
   path.reserve(static_cast<size_t>(duration / sampling_time_interval_));
+
+  const double exponential_half_life = time_horizon_ / 4.0;
+  const double λ = std::log(2) / exponential_half_life;
+
   for (double t = 0.0; t <= duration; t += sampling_time_interval_) {
-    const double current_acc =
-      0.0;  // Currently we assume the object is traveling at a constant speed
+    const double current_acc_d = 0.0;
+    // a(t) = obj_acc - obj_acc(1-e^(-λt)) = obj_acc(e^(-λt))
+    // V(t) = Vo + obj_acc(1/λ)(1-e^(-λt))
+    // x(t) = Xo + Vo * t + t * obj_acc(1/λ) + obj_acc(1/λ^2)e^(-λt)
+    // x(t) = Xo + (Vo + obj_acc(1/λ)) * t  + obj_acc(1/λ^2)e^(-λt)
+    // acceleration_distance = obj_acc(1/λ) * t  + obj_acc(1/λ^2)e^(-λt)
+    const double acceleration_distance_s =
+      current_point.s_acc * (1.0 / λ) * t +
+      current_point.s_acc * (1.0 / std::pow(λ, 2)) * std::exp(-λ * t);
     const double d_next_ = current_point.d + current_point.d_vel * t +
-                           current_acc * 2.0 * std::pow(t, 2) + lat_coeff(0) * std::pow(t, 3) +
+                           current_acc_d * 2.0 * std::pow(t, 2) + lat_coeff(0) * std::pow(t, 3) +
                            lat_coeff(1) * std::pow(t, 4) + lat_coeff(2) * std::pow(t, 5);
     // t > lateral_duration: 0.0, else d_next_
     const double d_next = t > lateral_duration ? 0.0 : d_next_;
-    const double s_next = current_point.s + current_point.s_vel * t +
-                          2.0 * current_acc * std::pow(t, 2) + lon_coeff(0) * std::pow(t, 3) +
-                          lon_coeff(1) * std::pow(t, 4);
+    const double s_next = current_point.s + current_point.s_vel * t + acceleration_distance_s +
+                          lon_coeff(0) * std::pow(t, 3) + lon_coeff(1) * std::pow(t, 4);
     if (s_next > max_length) {
       break;
     }
 
-    // We assume the object is traveling at a constant speed along s direction
     FrenetPoint point;
     point.s = std::max(s_next, 0.0);
-    point.s_vel = current_point.s_vel;
-    point.s_acc = current_point.s_acc;
+    point.s_vel = current_point.s_vel + current_point.s_acc * (1.0 / λ) * (1.0 - std::exp(-λ * t));
+    point.s_acc = current_point.s_acc * std::exp(-λ * t);
     point.d = d_next;
     point.d_vel = current_point.d_vel;
     point.d_acc = current_point.d_acc;
@@ -387,7 +403,6 @@ PredictedPath PathGenerator::convertToPredictedPath(
 FrenetPoint PathGenerator::getFrenetPoint(const TrackedObject & object, const PosePath & ref_path)
 {
   FrenetPoint frenet_point;
-  const double T = time_horizon_;
   const auto obj_point = object.kinematics.pose_with_covariance.pose.position;
 
   const size_t nearest_segment_idx = motion_utils::findNearestSegmentIndex(ref_path, obj_point);
@@ -406,27 +421,12 @@ FrenetPoint PathGenerator::getFrenetPoint(const TrackedObject & object, const Po
   const float ay =
     static_cast<float>(object.kinematics.acceleration_with_covariance.accel.linear.y);
 
-  // The decay constant λ = ln(2) / exponential_half_life
-  const float exponential_half_life = T / 4.0;
-  const float λ = std::log(2) / exponential_half_life;
-
-  // Vnew * T = Vo * T +  acc(1/λ) * T + acc(1/λ^2)e^(-λT)
-  // Vnew = Vo + acc(1/λ) + acc(1/T*λ^2)e^(-λT)
-  const float VX = vx + ax * (1 / λ + std::exp(-λ * T) / (T * std::pow(λ, 2)));
-  const float VY = vy + ay * (1 / λ + std::exp(-λ * T) / (T * std::pow(λ, 2)));
-
-  // a(t) = acc - acc(1-e^(-λt)) = acc(e^(-λt))
-  // V(t) = Vo + acc(1/λ)(1-e^(-λt))
-  // x(t) = Xo + Vo * t + t * acc(1/λ) + acc(1/λ^2)e^(-λt)
-  // x(t) = Xo + (Vo + acc(1/λ)) * t  + acc(1/λ^2)e^(-λt)
-  // acceleration_distance = acc(1/λ) * t  + acc(1/λ^2)e^(-λt)
-
   frenet_point.s = motion_utils::calcSignedArcLength(ref_path, 0, nearest_segment_idx) + l;
   frenet_point.d = motion_utils::calcLateralOffset(ref_path, obj_point);
-  frenet_point.s_vel = VX * std::cos(delta_yaw) - VY * std::sin(delta_yaw);
-  frenet_point.d_vel = VX * std::sin(delta_yaw) + VY * std::cos(delta_yaw);
-  frenet_point.s_acc = 0.0;
-  frenet_point.d_acc = 0.0;
+  frenet_point.s_vel = vx * std::cos(delta_yaw) - vy * std::sin(delta_yaw);
+  frenet_point.d_vel = vx * std::sin(delta_yaw) + vy * std::cos(delta_yaw);
+  frenet_point.s_acc = ax * std::cos(delta_yaw) - ay * std::sin(delta_yaw);
+  frenet_point.d_acc = 0.0;  // lateral acc is not considered
 
   return frenet_point;
 }
