@@ -36,6 +36,36 @@
 #include <tuple>
 #include <vector>
 
+#define debug(var)                                                      \
+  do {                                                                  \
+    std::cerr << __func__ << ": " << __LINE__ << ", " << #var << " : "; \
+    view(var);                                                          \
+  } while (0)
+template <typename T>
+void view(T e)
+{
+  std::cerr << e << std::endl;
+}
+template <typename T>
+void view(const std::vector<T> & v)
+{
+  for (const auto & e : v) {
+    std::cerr << e << " ";
+  }
+  std::cerr << std::endl;
+}
+template <typename T>
+void view(const std::vector<std::vector<T>> & vv)
+{
+  for (const auto & v : vv) {
+    view(v);
+  }
+}
+#define line()                                                                         \
+  {                                                                                    \
+    std::cerr << "(" << __FILE__ << ") " << __func__ << ": " << __LINE__ << std::endl; \
+  }
+
 namespace behavior_velocity_planner
 {
 namespace bg = boost::geometry;
@@ -901,10 +931,9 @@ std::optional<StopFactor> CrosswalkModule::checkStopForStuckVehicles(
       continue;
     }
 
-    const auto & obj_vel = object.kinematics.initial_twist_with_covariance.twist.linear;
-    if (p.stuck_vehicle_velocity < std::hypot(obj_vel.x, obj_vel.y)) {
-      continue;
-    }
+    const auto obj_vel = std::hypot(
+      object.kinematics.initial_twist_with_covariance.twist.linear.x,
+      object.kinematics.initial_twist_with_covariance.twist.linear.y);
 
     const auto & obj_pose = object.kinematics.initial_pose_with_covariance.pose;
     const auto lateral_offset = calcLateralOffset(ego_path.points, obj_pose.position);
@@ -913,12 +942,24 @@ std::optional<StopFactor> CrosswalkModule::checkStopForStuckVehicles(
     }
 
     // check if STOP is required
+    const auto object_braking_distance =
+      calcDecelDistWithJerkAndAccConstraints(
+        obj_vel, 0.0, p.min_acc_for_stuck_vehicle, p.min_acc_for_stuck_vehicle,
+        p.max_jerk_for_stuck_vehicle, p.min_jerk_for_stuck_vehicle)
+        .value_or(0.0);
+    debug(obj_vel);
+    debug(object_braking_distance);
+
+    if (p.stuck_vehicle_velocity < obj_vel) {
+      continue;
+    }
+
     const double crosswalk_front_to_obj_rear =
       calcSignedArcLength(ego_path.points, path_intersects.front(), obj_pose.position) -
-      object.shape.dimensions.x / 2.0;
+      object.shape.dimensions.x / 2.0 + object_braking_distance;
     const double crosswalk_back_to_obj_rear =
       calcSignedArcLength(ego_path.points, path_intersects.back(), obj_pose.position) -
-      object.shape.dimensions.x / 2.0;
+      object.shape.dimensions.x / 2.0 + object_braking_distance;
     const double required_space_length =
       planner_data_->vehicle_info_.vehicle_length_m + planner_param_.required_clearance;
 
