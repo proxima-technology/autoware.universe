@@ -13,9 +13,6 @@
 
   <node pkg="raw_vehicle_cmd_converter" exec="raw_vehicle_cmd_converter_node" name="raw_vehicle_cmd_converter" output="screen">
     <param from="$(var config_file)" allow_substs="true"/>
-    <param name="csv_path_accel_map" value="$(var csv_path_accel_map)"/>
-    <param name="csv_path_brake_map" value="$(var csv_path_brake_map)"/>
-    <param name="csv_path_steer_map" value="$(var csv_path_steer_map)"/>
     <remap from="~/input/control_cmd" to="$(var input_control_cmd)"/>
     <remap from="~/input/odometry" to="$(var input_odometry)"/>
     <remap from="~/input/steering" to="$(var input_steering)"/>
