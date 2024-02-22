@@ -188,7 +188,7 @@ BehaviorModuleOutput NormalLaneChange::generateOutput()
   return output;
 }
 
-void NormalLaneChange::extendOutputDrivableArea(BehaviorModuleOutput & output)
+void NormalLaneChange::extendOutputDrivableArea(BehaviorModuleOutput & output) const
 {
   const auto & dp = planner_data_->drivable_area_expansion_parameters;
 
@@ -471,7 +471,7 @@ void NormalLaneChange::resetParameters()
   RCLCPP_DEBUG(logger_, "reset all flags and debug information.");
 }
 
-TurnSignalInfo NormalLaneChange::updateOutputTurnSignal()
+TurnSignalInfo NormalLaneChange::updateOutputTurnSignal() const
 {
   TurnSignalInfo turn_signal_info = calcTurnSignalInfo();
   const auto [turn_signal_command, distance_to_vehicle_front] = utils::getPathTurnSignal(
@@ -1527,7 +1527,7 @@ PathSafetyStatus NormalLaneChange::isApprovedPathSafe() const
   return safety_status;
 }
 
-TurnSignalInfo NormalLaneChange::calcTurnSignalInfo()
+TurnSignalInfo NormalLaneChange::calcTurnSignalInfo() const
 {
   const auto get_blinker_pose = [](const PathWithLaneId & path, const double length) {
     double accumulated_length = 0.0;
