@@ -21,6 +21,8 @@
 #include "behavior_path_planner_common/utils/utils.hpp"
 #include "lanelet2_extension/utility/message_conversion.hpp"
 
+#include <behavior_path_avoidance_module/data_structs.hpp>
+#include <behavior_path_lane_change_module/utils/utils.hpp>
 #include <lanelet2_extension/utility/utilities.hpp>
 #include <rclcpp/logging.hpp>
 #include <tier4_autoware_utils/geometry/geometry.hpp>
@@ -32,11 +34,13 @@
 #include <boost/geometry/algorithms/centroid.hpp>
 #include <boost/geometry/strategies/cartesian/centroid_bashein_detmer.hpp>
 
-#include <cstddef>
+#include <limits>
 #include <utility>
 
 namespace behavior_path_planner
 {
+using behavior_path_planner::utils::lane_change::debug::createExecutionArea;
+
 AvoidanceByLaneChange::AvoidanceByLaneChange(
   const std::shared_ptr<LaneChangeParameters> & parameters,
   std::shared_ptr<AvoidanceByLCParameters> avoidance_parameters)
@@ -76,101 +80,15 @@ bool AvoidanceByLaneChange::specialRequiredCheck() const
     return false;
   }
 
-  const auto current_lanes = getCurrentLanes();
-  if (current_lanes.empty()) {
-    RCLCPP_DEBUG(logger_, "no empty lanes");
-    return false;
-  }
-
   const auto & nearest_object = data.target_objects.front();
+  const auto minimum_avoid_length = calcMinAvoidanceLength(nearest_object);
+  const auto minimum_lane_change_length = calcMinimumLaneChangeLength();
 
-  // get minimum lane change distance
-  const auto shift_intervals =
-    getRouteHandler()->getLateralIntervalsToPreferredLane(current_lanes.back(), direction_);
-  const double minimum_lane_change_length = utils::lane_change::calcMinimumLaneChangeLength(
-    *lane_change_parameters_, shift_intervals,
-    lane_change_parameters_->backward_length_buffer_for_end_of_lane);
+  lane_change_debug_.execution_area = createExecutionArea(
+    getCommonParam().vehicle_info, getEgoPose(),
+    std::max(minimum_lane_change_length, minimum_avoid_length), calcLateralOffset());
 
-  const auto ego_width = getCommonParam().vehicle_width;
-  const auto nearest_object_type = utils::getHighestProbLabel(nearest_object.object.classification);
-  const auto nearest_object_parameter =
-    avoidance_parameters_->object_parameters.at(nearest_object_type);
-  const auto avoid_margin =
-    nearest_object_parameter.safety_buffer_lateral * nearest_object.distance_factor +
-    nearest_object_parameter.avoid_margin_lateral + 0.5 * ego_width;
-
-  avoidance_helper_->setData(planner_data_);
-  const auto shift_length = avoidance_helper_->getShiftLength(
-    nearest_object, utils::avoidance::isOnRight(nearest_object), avoid_margin);
-
-  const auto minimum_avoid_distance = avoidance_helper_->getMinAvoidanceDistance(shift_length);
-
-  const auto max_offset = std::invoke([&]() -> double {
-    auto max_offset{0.0};
-    for (const auto & [type, p] : avoidance_parameters_->object_parameters) {
-      const auto offset =
-        2.0 * p.envelope_buffer_margin + p.safety_buffer_lateral + p.avoid_margin_lateral;
-      max_offset = std::max(max_offset, offset);
-    }
-    return max_offset;
-  });
-
-  auto create_point32 = [](const geometry_msgs::msg::Pose & pose) -> geometry_msgs::msg::Point32 {
-    geometry_msgs::msg::Point32 p;
-    p.x = static_cast<float>(pose.position.x);
-    p.y = static_cast<float>(pose.position.y);
-    p.z = static_cast<float>(pose.position.z);
-    return p;
-  };
-
-  const auto create_vehicle_polygon =
-    [&](const vehicle_info_util::VehicleInfo & vehicle_info, const double offset) {
-      const double & base_to_front = vehicle_info.max_longitudinal_offset_m;
-      const double & width = vehicle_info.vehicle_width_m;
-      const double & base_to_rear = vehicle_info.rear_overhang_m;
-
-      // if stationary object, extend forward and backward by the half of lon length
-      const double forward_lon_offset =
-        base_to_front + std::max(minimum_lane_change_length, minimum_avoid_distance);
-      const double backward_lon_offset = -base_to_rear;
-      const double lat_offset = width / 2.0 + offset;
-
-      const auto & base_link_pose = getEgoPose();
-
-      const auto p1 =
-        tier4_autoware_utils::calcOffsetPose(base_link_pose, forward_lon_offset, lat_offset, 0.0);
-      const auto p2 =
-        tier4_autoware_utils::calcOffsetPose(base_link_pose, forward_lon_offset, -lat_offset, 0.0);
-      const auto p3 =
-        tier4_autoware_utils::calcOffsetPose(base_link_pose, backward_lon_offset, -lat_offset, 0.0);
-      const auto p4 =
-        tier4_autoware_utils::calcOffsetPose(base_link_pose, backward_lon_offset, lat_offset, 0.0);
-      geometry_msgs::msg::Polygon polygon;
-
-      polygon.points.push_back(create_point32(p1));
-      polygon.points.push_back(create_point32(p2));
-      polygon.points.push_back(create_point32(p3));
-      polygon.points.push_back(create_point32(p4));
-
-      return polygon;
-    };
-
-  debug_execution_.effective_area =
-    create_vehicle_polygon(getCommonParam().vehicle_info, max_offset);
-
-  RCLCPP_DEBUG(logger_, "ego pose.x %.3f pose.y %.3f", getEgoPosition().x, getEgoPosition().y);
-  RCLCPP_DEBUG(
-    logger_, "effective_area p1.x %.3f, p1.y %.3f",
-    debug_execution_.effective_area.points.front().x,
-    debug_execution_.effective_area.points.front().y);
-
-  RCLCPP_DEBUG(
-    logger_,
-    "nearest_object.longitudinal %.3f, minimum_lane_change_length %.3f, minimum_avoid_distance "
-    "%.3f",
-    nearest_object.longitudinal, minimum_lane_change_length, minimum_avoid_distance);
-
-  return nearest_object.longitudinal > std::max(minimum_lane_change_length, minimum_avoid_distance);
+  return nearest_object.longitudinal > std::max(minimum_lane_change_length, minimum_avoid_length);
 }
 
 bool AvoidanceByLaneChange::specialExpiredCheck() const
@@ -338,5 +256,49 @@ ObjectData AvoidanceByLaneChange::createObjectData(
   utils::avoidance::fillAvoidanceNecessity(object_data, registered_objects_, vehicle_width, p);
 
   return object_data;
+}
+
+double AvoidanceByLaneChange::calcMinAvoidanceLength(const ObjectData & nearest_object) const
+{
+  const auto ego_width = getCommonParam().vehicle_width;
+  const auto nearest_object_type = utils::getHighestProbLabel(nearest_object.object.classification);
+  const auto nearest_object_parameter =
+    avoidance_parameters_->object_parameters.at(nearest_object_type);
+  const auto avoid_margin =
+    nearest_object_parameter.safety_buffer_lateral * nearest_object.distance_factor +
+    nearest_object_parameter.avoid_margin_lateral + 0.5 * ego_width;
+
+  avoidance_helper_->setData(planner_data_);
+  const auto shift_length = avoidance_helper_->getShiftLength(
+    nearest_object, utils::avoidance::isOnRight(nearest_object), avoid_margin);
+
+  return avoidance_helper_->getMinAvoidanceDistance(shift_length);
+}
+
+double AvoidanceByLaneChange::calcMinimumLaneChangeLength() const
+{
+  const auto current_lanes = getCurrentLanes();
+  if (current_lanes.empty()) {
+    RCLCPP_DEBUG(logger_, "no empty lanes");
+    return std::numeric_limits<double>::infinity();
+  }
+
+  // get minimum lane change distance
+  const auto shift_intervals =
+    getRouteHandler()->getLateralIntervalsToPreferredLane(current_lanes.back(), direction_);
+  return utils::lane_change::calcMinimumLaneChangeLength(
+    *lane_change_parameters_, shift_intervals,
+    lane_change_parameters_->backward_length_buffer_for_end_of_lane);
+}
+
+double AvoidanceByLaneChange::calcLateralOffset() const
+{
+  auto additional_lat_offset{0.0};
+  for (const auto & [type, p] : avoidance_parameters_->object_parameters) {
+    const auto offset =
+      2.0 * p.envelope_buffer_margin + p.safety_buffer_lateral + p.avoid_margin_lateral;
+    additional_lat_offset = std::max(additional_lat_offset, offset);
+  }
+  return additional_lat_offset;
 }
 }  // namespace behavior_path_planner

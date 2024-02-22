@@ -16,13 +16,9 @@
 
 #include "behavior_path_planner_common/interface/scene_module_interface.hpp"
 #include "behavior_path_planner_common/interface/scene_module_visitor.hpp"
-#include "behavior_path_planner_common/marker_utils/utils.hpp"
 
-#include <algorithm>
 #include <memory>
 #include <string>
-#include <utility>
-#include <vector>
 
 namespace behavior_path_planner
 {
