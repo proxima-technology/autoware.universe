@@ -97,7 +97,7 @@ std::pair<bool, bool> NormalLaneChange::getSafePath(LaneChangePath & safe_path) 
       lane_change_parameters_->rss_params_for_stuck, is_stuck);
   }
 
-  debug_valid_path_ = valid_paths;
+  lane_change_debug_.valid_paths = valid_paths;
 
   if (valid_paths.empty()) {
     safe_path.info.current_lanes = current_lanes;
@@ -474,13 +474,8 @@ void NormalLaneChange::resetParameters()
   current_lane_change_state_ = LaneChangeStates::Normal;
   abort_path_ = nullptr;
   status_ = {};
+  lane_change_debug_.reset();
 
-  object_debug_.clear();
-  object_debug_after_approval_.clear();
-  debug_filtered_objects_.current_lane.clear();
-  debug_filtered_objects_.target_lane.clear();
-  debug_filtered_objects_.other_lane.clear();
-  debug_valid_path_.clear();
   RCLCPP_DEBUG(logger_, "reset all flags and debug information.");
 }
 
@@ -1187,7 +1182,7 @@ bool NormalLaneChange::getLaneChangePaths(
   const utils::path_safety_checker::RSSparams rss_params, const bool is_stuck,
   const bool check_safety) const
 {
-  object_debug_.clear();
+  lane_change_debug_.collision_check_objects.clear();
   if (current_lanes.empty() || target_lanes.empty()) {
     RCLCPP_WARN(logger_, "target_neighbor_preferred_lane_poly_2d is empty. Not expected.");
     return false;
@@ -1233,7 +1228,7 @@ bool NormalLaneChange::getLaneChangePaths(
   }
 
   const auto target_objects = getTargetObjects(current_lanes, target_lanes);
-  debug_filtered_objects_ = target_objects;
+  lane_change_debug_.filtered_objects = target_objects;
 
   const auto prepare_durations = calcPrepareDuration(current_lanes, target_lanes);
 
@@ -1460,9 +1455,10 @@ bool NormalLaneChange::getLaneChangePaths(
         std::vector<ExtendedPredictedObject> filtered_objects =
           filterObjectsInTargetLane(target_objects, target_lanes);
         if (
-          !is_stuck && utils::lane_change::passParkedObject(
-                         route_handler, *candidate_path, filtered_objects, lane_change_buffer,
-                         is_goal_in_route, *lane_change_parameters_, object_debug_)) {
+          !is_stuck &&
+          utils::lane_change::passParkedObject(
+            route_handler, *candidate_path, filtered_objects, lane_change_buffer, is_goal_in_route,
+            *lane_change_parameters_, lane_change_debug_.collision_check_objects)) {
           debug_print(
             "Reject: parking vehicle exists in the target lane, and the ego is not in stuck. Skip "
             "lane change.");
@@ -1475,7 +1471,8 @@ bool NormalLaneChange::getLaneChangePaths(
         }
 
         const auto [is_safe, is_object_coming_from_rear] = isLaneChangePathSafe(
-          *candidate_path, target_objects, rss_params, is_stuck, object_debug_);
+          *candidate_path, target_objects, rss_params, is_stuck,
+          lane_change_debug_.collision_check_objects);
 
         if (is_safe) {
           debug_print("ACCEPT!!!: it is valid and safe!");
@@ -1643,7 +1640,7 @@ PathSafetyStatus NormalLaneChange::isApprovedPathSafe() const
   const auto & target_lanes = status_.target_lanes;
 
   const auto target_objects = getTargetObjects(current_lanes, target_lanes);
-  debug_filtered_objects_ = target_objects;
+  lane_change_debug_.filtered_objects = target_objects;
 
   CollisionCheckDebugMap debug_data;
   const bool is_stuck = isVehicleStuck(current_lanes);
@@ -1651,16 +1648,17 @@ PathSafetyStatus NormalLaneChange::isApprovedPathSafe() const
     path, target_objects, lane_change_parameters_->rss_params_for_abort, is_stuck, debug_data);
   {
     // only for debug purpose
-    object_debug_.clear();
-    object_debug_lifetime_ += (stop_watch_.toc(getModuleTypeStr()) / 1000);
-    if (object_debug_lifetime_ > 2.0) {
+    lane_change_debug_.collision_check_objects.clear();
+    lane_change_debug_.collision_check_object_debug_lifetime +=
+      (stop_watch_.toc(getModuleTypeStr()) / 1000);
+    if (lane_change_debug_.collision_check_object_debug_lifetime > 2.0) {
       stop_watch_.toc(getModuleTypeStr(), true);
-      object_debug_lifetime_ = 0.0;
-      object_debug_after_approval_.clear();
+      lane_change_debug_.collision_check_object_debug_lifetime = 0.0;
+      lane_change_debug_.collision_check_objects_after_approval.clear();
     }
 
     if (!safety_status.is_safe) {
-      object_debug_after_approval_ = debug_data;
+      lane_change_debug_.collision_check_objects_after_approval = debug_data;
     }
   }
 
@@ -2020,7 +2018,7 @@ bool NormalLaneChange::isVehicleStuck(
   using lanelet::utils::getArcCoordinates;
   const auto base_distance = getArcCoordinates(current_lanes, getEgoPose()).length;
 
-  for (const auto & object : debug_filtered_objects_.current_lane) {
+  for (const auto & object : lane_change_debug_.filtered_objects.current_lane) {
     const auto & p = object.initial_pose.pose;  // TODO(Horibe): consider footprint point
 
     // Note: it needs chattering prevention.
