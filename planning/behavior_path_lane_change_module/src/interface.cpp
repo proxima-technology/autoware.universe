@@ -59,6 +59,7 @@ void LaneChangeInterface::processOnExit()
 {
   module_type_->resetParameters();
   debug_marker_.markers.clear();
+  post_process_safety_status_ = {};
   resetPathCandidate();
 }
 
@@ -95,9 +96,10 @@ void LaneChangeInterface::updateData()
 
 void LaneChangeInterface::postProcess()
 {
-  RCLCPP_DEBUG(logger_, "post processing");
-  if (!isWaitingApproval()) {
-    post_process_safety_status_ = module_type_->isApprovedPathSafe();
+  if (getCurrentStatus() == ModuleStatus::RUNNING) {
+    const auto safety_status = module_type_->isApprovedPathSafe();
+    post_process_safety_status_ =
+      module_type_->evaluateApprovedPathWithUnsafeHysteresis(safety_status);
   }
 }
 
