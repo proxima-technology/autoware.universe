@@ -317,11 +317,10 @@ bool LaneChangeInterface::canTransitIdleToRunningState()
 
 void LaneChangeInterface::updateDebugMarker() const
 {
+  debug_marker_.markers.clear();
   if (!parameters_->publish_debug_marker) {
     return;
   }
-
-  debug_marker_.markers.clear();
   using marker_utils::lane_change_markers::createDebugMarkerArray;
   debug_marker_ = createDebugMarkerArray(module_type_->getDebugData());
 }
