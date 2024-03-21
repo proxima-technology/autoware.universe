@@ -121,8 +121,25 @@ bool RunOutModule::modifyPathVelocity(
                                         planner_data_->route_handler_->getLaneletMapPtr(),
                                         planner_data_->route_handler_->getOverallGraphPtr())
                                     : std::vector<std::pair<int64_t, lanelet::ConstLanelet>>();
+
+  const auto exclude_objects_that_go_through_ego =
+    [&](
+      const std::vector<DynamicObstacle> & dynamic_obstacles,
+      const std::vector<std::pair<int64_t, lanelet::ConstLanelet>> & crosswalk_lanelets) {
+      std::vector<DynamicObstacle> non_collided_obstacles;
+      const double travel_time = planner_param_.dynamic_obstacle.max_prediction_time;
+      const auto vehicle_poly = createVehiclePolygon(current_pose);
+
+      checkCollisionWithObstacles(
+        dynamic_obstacles, vehicle_poly, travel_time, crosswalk_lanelets, non_collided_obstacles);
+      return non_collided_obstacles;
+    };
+
+  const auto filtered_objects =
+    exclude_objects_that_go_through_ego(partition_excluded_obstacles, crosswalk_lanelets);
+
   const auto dynamic_obstacle =
-    detectCollision(partition_excluded_obstacles, extended_smoothed_path, crosswalk_lanelets);
+    detectCollision(filtered_objects, extended_smoothed_path, crosswalk_lanelets);
 
   // record time for collision check
   const auto t_collision_check = std::chrono::system_clock::now();
@@ -200,8 +217,9 @@ std::optional<DynamicObstacle> RunOutModule::detectCollision(
     debug_ptr_->pushPredictedVehiclePolygons(vehicle_poly);
     debug_ptr_->pushTravelTimeTexts(travel_time, p2.pose, /* lateral_offset */ 3.0);
 
-    auto obstacles_collision =
-      checkCollisionWithObstacles(dynamic_obstacles, vehicle_poly, travel_time, crosswalk_lanelets);
+    std::vector<DynamicObstacle> non_collided_obstacles;
+    auto obstacles_collision = checkCollisionWithObstacles(
+      dynamic_obstacles, vehicle_poly, travel_time, crosswalk_lanelets, non_collided_obstacles);
     if (obstacles_collision.empty()) {
       continue;
     }
@@ -322,7 +340,8 @@ std::vector<geometry_msgs::msg::Point> RunOutModule::createVehiclePolygon(
 std::vector<DynamicObstacle> RunOutModule::checkCollisionWithObstacles(
   const std::vector<DynamicObstacle> & dynamic_obstacles,
   std::vector<geometry_msgs::msg::Point> poly, const float travel_time,
-  const std::vector<std::pair<int64_t, lanelet::ConstLanelet>> & crosswalk_lanelets) const
+  const std::vector<std::pair<int64_t, lanelet::ConstLanelet>> & crosswalk_lanelets,
+  std::vector<DynamicObstacle> & non_collided_obstacles) const
 {
   const auto bg_poly_vehicle = run_out_utils::createBoostPolyFromMsg(poly);
 
@@ -355,6 +374,7 @@ std::vector<DynamicObstacle> RunOutModule::checkCollisionWithObstacles(
       bg_poly_vehicle, pose_with_range, obstacle.shape, crosswalk_lanelets, collision_points);
 
     if (!collision_detected) {
+      non_collided_obstacles.emplace_back(obstacle);
       continue;
     }
 

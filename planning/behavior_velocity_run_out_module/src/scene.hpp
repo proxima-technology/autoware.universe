@@ -80,7 +80,8 @@ private:
   std::vector<DynamicObstacle> checkCollisionWithObstacles(
     const std::vector<DynamicObstacle> & dynamic_obstacles,
     std::vector<geometry_msgs::msg::Point> poly, const float travel_time,
-    const std::vector<std::pair<int64_t, lanelet::ConstLanelet>> & crosswalk_lanelets) const;
+    const std::vector<std::pair<int64_t, lanelet::ConstLanelet>> & crosswalk_lanelets,
+    std::vector<DynamicObstacle> & non_collided_obstacles) const;
 
   std::optional<DynamicObstacle> findNearestCollisionObstacle(
     const PathWithLaneId & path, const geometry_msgs::msg::Pose & base_pose,
