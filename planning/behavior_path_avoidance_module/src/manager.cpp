@@ -107,6 +107,7 @@ void AvoidanceModuleManager::updateModuleParams(const std::vector<rclcpp::Parame
     const std::string ns = "avoidance.avoidance.longitudinal.";
     updateParam<double>(parameters, ns + "min_prepare_time", p->min_prepare_time);
     updateParam<double>(parameters, ns + "max_prepare_time", p->max_prepare_time);
+    updateParam<double>(parameters, ns + "min_prepare_distance", p->min_prepare_distance);
     updateParam<double>(parameters, ns + "min_slow_down_speed", p->min_slow_down_speed);
     updateParam<double>(parameters, ns + "buf_slow_down_speed", p->buf_slow_down_speed);
   }
@@ -115,6 +116,31 @@ void AvoidanceModuleManager::updateModuleParams(const std::vector<rclcpp::Parame
     const std::string ns = "avoidance.stop.";
     updateParam<double>(parameters, ns + "max_distance", p->stop_max_distance);
     updateParam<double>(parameters, ns + "stop_buffer", p->stop_buffer);
+  }
+
+  {
+    const std::string ns = "avoidance.policy.";
+    updateParam<std::string>(parameters, ns + "make_approval_request", p->policy_approval);
+    updateParam<std::string>(parameters, ns + "deceleration", p->policy_deceleration);
+    updateParam<std::string>(parameters, ns + "lateral_margin", p->policy_lateral_margin);
+    updateParam<bool>(
+      parameters, ns + "use_shorten_margin_immediately", p->use_shorten_margin_immediately);
+
+    if (p->policy_approval != "per_shift_line" && p->policy_approval != "per_avoidance_maneuver") {
+      RCLCPP_ERROR(
+        rclcpp::get_logger(__func__),
+        "invalid policy. please select 'per_shift_line' or 'per_avoidance_maneuver'.");
+    }
+
+    if (p->policy_deceleration != "best_effort" && p->policy_deceleration != "reliable") {
+      RCLCPP_ERROR(
+        rclcpp::get_logger(__func__), "invalid policy. please select 'best_effort' or 'reliable'.");
+    }
+
+    if (p->policy_lateral_margin != "best_effort" && p->policy_lateral_margin != "reliable") {
+      RCLCPP_ERROR(
+        rclcpp::get_logger(__func__), "invalid policy. please select 'best_effort' or 'reliable'.");
+    }
   }
 
   {
