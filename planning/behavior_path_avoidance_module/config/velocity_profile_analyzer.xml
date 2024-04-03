@@ -1,0 +1,88 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<root>
+ <tabbed_widget name="Main Window" parent="main_window">
+  <Tab containers="1" tab_name="tab1">
+   <Container>
+    <DockSplitter count="1" sizes="1" orientation="-">
+     <DockSplitter count="2" sizes="0.5;0.5" orientation="|">
+      <DockArea name="...">
+       <plot mode="XYPlot" style="LinesAndDots" flip_y="false" flip_x="false">
+        <range top="17.083333" bottom="-0.416667" left="-7.690008" right="0.230632"/>
+        <limitY/>
+        <curve name="v_behavior_path" color="#1f77b4"/>
+        <curve name="v_motion_smoother" color="#d62728"/>
+        <curve name="localization_kinematic_state" color="#ff7f0e"/>
+       </plot>
+      </DockArea>
+      <DockSplitter count="2" sizes="0.500717;0.499283" orientation="-">
+       <DockArea name="...">
+        <plot mode="TimeSeries" style="Lines" flip_y="false" flip_x="false">
+         <range top="2.000000" bottom="-2.000000" left="133.207131" right="233.205813"/>
+         <limitY max="2" min="-2"/>
+         <curve name="/planning/scenario_planning/motion_velocity_smoother/closest_acceleration/data" color="#1ac938"/>
+         <curve name="/planning/scenario_planning/motion_velocity_smoother/closest_jerk/data" color="#1f77b4"/>
+         <curve name="/localization/acceleration/accel/accel/linear/x" color="#d62728"/>
+        </plot>
+       </DockArea>
+       <DockArea name="...">
+        <plot mode="TimeSeries" style="Lines" flip_y="false" flip_x="false">
+         <range top="9.963000" bottom="-0.243000" left="133.213700" right="233.189587"/>
+         <limitY/>
+         <curve name="/planning/scenario_planning/motion_velocity_smoother/closest_velocity/data" color="#1f77b4"/>
+        </plot>
+       </DockArea>
+      </DockSplitter>
+     </DockSplitter>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <currentTabIndex index="0"/>
+ </tabbed_widget>
+ <use_relative_time_offset enabled="1"/>
+ <!-- - - - - - - - - - - - - - - -->
+ <!-- - - - - - - - - - - - - - - -->
+ <Plugins>
+  <plugin ID="DataLoad CSV">
+   <parameters time_axis="" delimiter="0"/>
+  </plugin>
+  <plugin ID="DataLoad MCAP"/>
+  <plugin ID="DataLoad ROS2 bags">
+   <use_header_stamp value="false"/>
+   <discard_large_arrays value="true"/>
+   <max_array_size value="100"/>
+   <boolean_strings_to_number value="true"/>
+   <remove_suffix_from_strings value="true"/>
+   <selected_topics value=""/>
+  </plugin>
+  <plugin ID="DataLoad ULog"/>
+  <plugin ID="ROS2 Topic Subscriber">
+   <use_header_stamp value="false"/>
+   <discard_large_arrays value="true"/>
+   <max_array_size value="100"/>
+   <boolean_strings_to_number value="true"/>
+   <remove_suffix_from_strings value="true"/>
+   <selected_topics value="/localization/kinematic_state;/planning/scenario_planning/lane_driving/behavior_planning/path/debug_info;/planning/scenario_planning/lane_driving/behavior_planning/path_with_lane_id/debug_info;/planning/scenario_planning/lane_driving/motion_planning/obstacle_avoidance_planner/trajectory/debug_info;/planning/scenario_planning/motion_velocity_smoother/debug/backward_filtered_trajectory/debug_info;/planning/scenario_planning/motion_velocity_smoother/debug/forward_filtered_trajectory/debug_info;/planning/scenario_planning/motion_velocity_smoother/debug/merged_filtered_trajectory/debug_info;/planning/scenario_planning/motion_velocity_smoother/debug/trajectory_external_velocity_limited/debug_info;/planning/scenario_planning/motion_velocity_smoother/debug/trajectory_lateral_acc_filtered/debug_info;/planning/scenario_planning/motion_velocity_smoother/debug/trajectory_raw/debug_info;/planning/scenario_planning/motion_velocity_smoother/debug/trajectory_time_resampled/debug_info;/planning/scenario_planning/trajectory/debug_info;/localization/acceleration;/planning/scenario_planning/motion_velocity_smoother/closest_acceleration;/planning/scenario_planning/motion_velocity_smoother/closest_jerk;/planning/scenario_planning/motion_velocity_smoother/closest_velocity"/>
+  </plugin>
+  <plugin ID="UDP Server"/>
+  <plugin ID="WebSocket Server"/>
+  <plugin ID="ZMQ Subscriber"/>
+  <plugin ID="Fast Fourier Transform"/>
+  <plugin ID="Quaternion to RPY"/>
+  <plugin ID="Reactive Script Editor">
+   <library code="function PlotValue(name, path, timestamp, value)&#xa;  new_series = ScatterXY.new(name)&#xa;  index = 0&#xa;  while(true) do&#xa;    series_k = TimeseriesView.find( string.format( &quot;%s/&quot;..value..&quot;[%d]&quot;, path, index) )&#xa;    series_s = TimeseriesView.find( string.format( &quot;%s/arclength[%d]&quot;, path, index) )&#xa;    series_size = TimeseriesView.find( string.format( &quot;%s/size&quot;, path) )&#xa;&#xa;    if series_k == nil or series_s == nil then break end&#xa;&#xa;    k = series_k:atTime(timestamp)&#xa;    s = series_s:atTime(timestamp)&#xa;    size = series_size:atTime(timestamp)&#xa;&#xa;    if index >= size then break end&#xa;&#xa;    new_series:push_back(s,k)&#xa;    index = index+1&#xa;  end&#xa;end&#xa;&#xa;function PlotCurvatureOverArclength(name, path, timestamp)&#xa;  PlotValue(name, path, timestamp,&quot;curvature&quot;)&#xa;end&#xa;&#xa;function PlotVelocityOverArclength(name, path, timestamp)&#xa;  PlotValue(name, path, timestamp,&quot;velocity&quot;)&#xa;end&#xa;&#xa;function PlotAccelerationOverArclength(name, path, timestamp)&#xa;  PlotValue(name, path, timestamp,&quot;acceleration&quot;)&#xa;end&#xa;&#xa;function PlotYawOverArclength(name, path, timestamp)&#xa;  PlotValue(name, path, timestamp,&quot;yaw&quot;)&#xa;end&#xa;&#xa;function PlotCurrentVelocity(name, kinematics_name, timestamp)&#xa;  new_series = ScatterXY.new(name)&#xa;  series_v = TimeseriesView.find( string.format( &quot;%s/twist/twist/linear/x&quot;, kinematics_name))&#xa;  if series_v == nil then&#xa;    print(&quot;error&quot;)&#xa;    return&#xa;  end&#xa;  v = series_v:atTime(timestamp)&#xa;  new_series:push_back(0.0, v)&#xa;end"/>
+   <scripts>
+    <script name="trajectory_visualizer" global="behavior_path = '/planning/scenario_planning/lane_driving/behavior_planning/path_with_lane_id/debug_info'&#xa;behavior_velocity = '/planning/scenario_planning/lane_driving/behavior_planning/path/debug_info'&#xa;motion_avoid = '/planning/scenario_planning/lane_driving/motion_planning/obstacle_avoidance_planner/trajectory/debug_info'&#xa;motion_smoother_latacc = '/planning/scenario_planning/motion_velocity_smoother/debug/trajectory_lateral_acc_filtered/debug_info'&#xa;motion_smoother = '/planning/scenario_planning/trajectory/debug_info'" function="PlotCurvatureOverArclength('k_behavior_path', behavior_path, tracker_time)&#xa;PlotCurvatureOverArclength('k_behavior_velocity', behavior_velocity, tracker_time)&#xa;PlotCurvatureOverArclength('k_motion_avoid', motion_avoid, tracker_time)&#xa;PlotCurvatureOverArclength('k_motion_smoother', motion_smoother, tracker_time)&#xa;&#xa;PlotVelocityOverArclength('v_behavior_path', behavior_path, tracker_time)&#xa;PlotVelocityOverArclength('v_behavior_velocity', behavior_velocity, tracker_time)&#xa;PlotVelocityOverArclength('v_motion_avoid', motion_avoid, tracker_time)&#xa;PlotVelocityOverArclength('v_motion_smoother_latacc', motion_smoother_latacc, tracker_time)&#xa;PlotVelocityOverArclength('v_motion_smoother', motion_smoother, tracker_time)&#xa;&#xa;PlotAccelerationOverArclength('a_behavior_path', behavior_path, tracker_time)&#xa;PlotAccelerationOverArclength('a_behavior_velocity', behavior_velocity, tracker_time)&#xa;PlotAccelerationOverArclength('a_motion_avoid', motion_avoid, tracker_time)&#xa;PlotAccelerationOverArclength('a_motion_smoother_latacc', motion_smoother_latacc, tracker_time)&#xa;PlotAccelerationOverArclength('a_motion_smoother', motion_smoother, tracker_time)&#xa;&#xa;PlotYawOverArclength('yaw_behavior_path', behavior_path, tracker_time)&#xa;PlotYawOverArclength('yaw_behavior_velocity', behavior_velocity, tracker_time)&#xa;PlotYawOverArclength('yaw_motion_avoid', motion_avoid, tracker_time)&#xa;PlotYawOverArclength('yaw_motion_smoother_latacc', motion_smoother_latacc, tracker_time)&#xa;PlotYawOverArclength('yaw_motion_smoother', motion_smoother, tracker_time)&#xa;&#xa;PlotCurrentVelocity('localization_kinematic_state', '/localization/kinematic_state', tracker_time)"/>
+   </scripts>
+  </plugin>
+  <plugin ID="CSV Exporter"/>
+  <plugin ID="ROS2 Topic Re-Publisher"/>
+ </Plugins>
+ <!-- - - - - - - - - - - - - - - -->
+ <previouslyLoaded_Datafiles/>
+ <previouslyLoaded_Streamer name="ROS2 Topic Subscriber"/>
+ <!-- - - - - - - - - - - - - - - -->
+ <customMathEquations/>
+ <snippets/>
+ <!-- - - - - - - - - - - - - - - -->
+</root>
+

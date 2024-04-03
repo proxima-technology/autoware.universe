@@ -1593,6 +1593,11 @@ void AvoidanceModule::insertPrepareVelocity(ShiftedPath & shifted_path) const
     return;
   }
 
+  // TMP for J6
+  if (!data.avoid_required) {
+    return;
+  }
+
   // If avoidance path is NOT safe, don't insert any slow down sections.
   if (!data.valid) {
     return;
