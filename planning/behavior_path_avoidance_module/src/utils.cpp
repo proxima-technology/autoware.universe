@@ -566,9 +566,9 @@ bool isParkedVehicle(
     const auto arc_coordinates = toArcCoordinates(
       to2D(object.overhang_lanelet.centerline().basicLineString()),
       to2D(toLaneletPoint(object_pos)).basicPoint());
-    object.shiftable_ratio = arc_coordinates.distance / object_shiftable_distance;
+    object.shiftable_ratio = object_shiftable_distance - arc_coordinates.distance;
 
-    is_left_side_parked_vehicle = object.shiftable_ratio > parameters->object_check_shiftable_ratio;
+    is_left_side_parked_vehicle = object.shiftable_ratio < parameters->object_check_shiftable_ratio;
   }
 
   bool is_right_side_parked_vehicle = false;
@@ -614,10 +614,10 @@ bool isParkedVehicle(
     const auto arc_coordinates = toArcCoordinates(
       to2D(object.overhang_lanelet.centerline().basicLineString()),
       to2D(toLaneletPoint(object_pos)).basicPoint());
-    object.shiftable_ratio = -1.0 * arc_coordinates.distance / object_shiftable_distance;
+    object.shiftable_ratio = object_shiftable_distance + arc_coordinates.distance;
 
     is_right_side_parked_vehicle =
-      object.shiftable_ratio > parameters->object_check_shiftable_ratio;
+      object.shiftable_ratio < parameters->object_check_shiftable_ratio;
   }
 
   if (!is_left_side_parked_vehicle && !is_right_side_parked_vehicle) {
@@ -627,7 +627,7 @@ bool isParkedVehicle(
   const auto & object_pose = object.object.kinematics.initial_pose_with_covariance.pose;
   object.to_centerline =
     lanelet::utils::getArcCoordinates(data.current_lanelets, object_pose).distance;
-  if (std::abs(object.to_centerline) < parameters->threshold_distance_object_is_on_center) {
+  if (std::abs(object.to_centerline) < parameters->object_check_min_road_shoulder_width) {
     return false;
   }
 
