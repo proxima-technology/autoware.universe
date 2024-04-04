@@ -132,8 +132,11 @@ bool AvoidanceModule::isExecutionRequested() const
 
 bool AvoidanceModule::isExecutionReady() const
 {
-  DEBUG_PRINT("AVOIDANCE isExecutionReady");
-  return avoid_data_.safe && avoid_data_.comfortable && avoid_data_.valid && avoid_data_.ready;
+  const auto & d = avoid_data_;
+  RCLCPP_DEBUG_STREAM(
+    getLogger(), std::boolalpha << "[safe]:" << d.safe << " [comfortable]:" << d.comfortable
+                                << " [valid]:" << d.valid << " [ready]:" << d.ready);
+  return d.safe && d.comfortable && d.valid && d.ready;
 }
 
 bool AvoidanceModule::isSatisfiedSuccessCondition(const AvoidancePlanningData & data) const
