@@ -232,7 +232,7 @@ private:
     for (const auto & lane : lanes) {
       const bool road_bound_crossed = std::any_of(
         path.path.points.begin() + shift_line.start_idx, path.path.points.end(),
-        [&footprint](const auto & p) {
+        [&footprint, &lane](const auto & p) {
           const auto transform = pose2transform(p.point.pose);
           const auto shifted_vehicle_footprint = transformVector(footprint, transform);
 
