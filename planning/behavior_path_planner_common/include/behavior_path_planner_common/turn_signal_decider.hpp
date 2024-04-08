@@ -230,18 +230,22 @@ private:
     const auto footprint = vehicle_info.createFootprint();
 
     for (const auto & lane : lanes) {
-      for (size_t i = shift_line.start_idx; i < shift_line.end_idx; ++i) {
-        const auto transform = pose2transform(path.path.points.at(i).point.pose);
-        const auto shifted_vehicle_footprint = transformVector(footprint, transform);
+      const bool road_bound_crossed = std::any_of(
+        path.path.points.begin() + shift_line.start_idx, path.path.points.end(),
+        [&footprint](const auto & p) {
+          const auto transform = pose2transform(p.point.pose);
+          const auto shifted_vehicle_footprint = transformVector(footprint, transform);
 
-        if (intersects(lane.leftBound2d().basicLineString(), shifted_vehicle_footprint)) {
-          return true;
-        }
+          if (intersects(lane.leftBound2d().basicLineString(), shifted_vehicle_footprint)) {
+            return true;
+          }
 
-        if (intersects(lane.rightBound2d().basicLineString(), shifted_vehicle_footprint)) {
-          return true;
-        }
-      }
+          if (intersects(lane.rightBound2d().basicLineString(), shifted_vehicle_footprint)) {
+            return true;
+          }
+          return false;
+        });
+      if (road_bound_crossed) return true;
     }
 
     return false;

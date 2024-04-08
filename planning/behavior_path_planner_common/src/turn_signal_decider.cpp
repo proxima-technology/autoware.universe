@@ -666,11 +666,10 @@ std::pair<TurnSignalInfo, bool> TurnSignalDecider::getBehaviorTurnSignalInfo(
     std::invoke([&path, &shift_line, &egos_lane_is_shifted]() -> std::pair<double, double> {
       const auto temp_start_shift_length = path.shift_length.at(shift_line.start_idx);
       const auto temp_end_shift_length = path.shift_length.at(shift_line.end_idx);
-      // Shift is done using the target lane and not current ego's lane
-      if (!egos_lane_is_shifted) {
-        return std::make_pair(temp_end_shift_length, -temp_start_shift_length);
-      }
-      return std::make_pair(temp_start_shift_length, temp_end_shift_length);
+      // Check which lane is shifted
+      return (egos_lane_is_shifted)
+               ? std::make_pair(temp_start_shift_length, temp_end_shift_length)
+               : std::make_pair(temp_end_shift_length, -temp_start_shift_length);
     });
 
   const auto relative_shift_length = end_shift_length - start_shift_length;
