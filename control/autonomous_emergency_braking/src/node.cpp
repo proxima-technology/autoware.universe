@@ -89,7 +89,7 @@ AEB::AEB(const rclcpp::NodeOptions & node_options)
 {
   // Subscribers
   sub_point_cloud_ = this->create_subscription<PointCloud2>(
-    "~/input/pointcloud", rclcpp::SensorDataQoS(),
+    "/perception/obstacle_segmentation/pointcloud", rclcpp::SensorDataQoS(),
     std::bind(&AEB::onPointCloud, this, std::placeholders::_1));
 
   sub_velocity_ = this->create_subscription<VelocityReport>(
@@ -290,6 +290,7 @@ bool AEB::checkCollision(MarkerArray & debug_markers)
   }
 
   // step3. create ego path based on sensor data
+  std::cerr << "---------CHECKING COLLISIONS!!!!!---------\n";
   bool has_collision_ego = false;
   if (use_imu_path_) {
     Path ego_path;
