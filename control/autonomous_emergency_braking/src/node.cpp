@@ -569,7 +569,7 @@ void AEB::createClusteredPointCloudObjectData(
   std::vector<ObjectData> & objects)
 {
   // check if the predicted path has valid number of points
-  if (ego_path.size() < 2 || ego_polys.empty() || !cropped_ros_pointcloud_ptr_) {
+  if (ego_path.size() < 2 || ego_polys.empty() || cropped_ros_pointcloud_ptr_->data.empty()) {
     return;
   }
 
