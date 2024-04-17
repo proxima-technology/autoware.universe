@@ -373,7 +373,6 @@ bool AEB::checkCollision(MarkerArray & debug_markers)
 
       std::vector<ObjectData> objects_from_point_clusters;
       const auto predicted_polys = generatePathFootprint(predicted_path, expand_width_);
-      cropPointCloudWithEgoFootprintPath(predicted_polys);
       createObjectDataUsingPointCloudClusters(
         predicted_path, predicted_polys, current_time, objects_from_point_clusters);
       has_collision_predicted =
