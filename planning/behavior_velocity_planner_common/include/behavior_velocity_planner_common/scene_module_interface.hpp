@@ -31,6 +31,7 @@
 #include <tier4_debug_msgs/msg/float64_stamped.hpp>
 #include <tier4_planning_msgs/msg/stop_reason.hpp>
 #include <tier4_planning_msgs/msg/stop_reason_array.hpp>
+#include <tier4_rtc_msgs/msg/state.hpp>
 #include <tier4_v2x_msgs/msg/infrastructure_command_array.hpp>
 #include <unique_identifier_msgs/msg/uuid.hpp>
 
@@ -58,6 +59,7 @@ using tier4_debug_msgs::msg::Float64Stamped;
 using tier4_planning_msgs::msg::StopFactor;
 using tier4_planning_msgs::msg::StopReason;
 using tier4_rtc_msgs::msg::Module;
+using tier4_rtc_msgs::msg::State;
 using unique_identifier_msgs::msg::UUID;
 
 struct ObjectOfInterest
@@ -237,7 +239,7 @@ protected:
   void updateRTCStatus(
     const UUID & uuid, const bool safe, const double distance, const Time & stamp)
   {
-    rtc_interface_.updateCooperateStatus(uuid, safe, distance, distance, stamp);
+    rtc_interface_.updateCooperateStatus(uuid, safe, State::RUNNING, distance, distance, stamp);
   }
 
   void removeRTCStatus(const UUID & uuid) { rtc_interface_.removeCooperateStatus(uuid); }

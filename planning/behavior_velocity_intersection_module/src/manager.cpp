@@ -345,10 +345,10 @@ void IntersectionModuleManager::launchNewModules(
     const UUID uuid = getUUID(new_module->getModuleId());
     const auto occlusion_uuid = new_module->getOcclusionUUID();
     rtc_interface_.updateCooperateStatus(
-      uuid, true, std::numeric_limits<double>::lowest(), std::numeric_limits<double>::lowest(),
-      clock_->now());
+      uuid, true, State::RUNNING, std::numeric_limits<double>::lowest(),
+      std::numeric_limits<double>::lowest(), clock_->now());
     occlusion_rtc_interface_.updateCooperateStatus(
-      occlusion_uuid, true, std::numeric_limits<double>::lowest(),
+      occlusion_uuid, true, State::RUNNING, std::numeric_limits<double>::lowest(),
       std::numeric_limits<double>::lowest(), clock_->now());
     registerModule(std::move(new_module));
   }
@@ -409,7 +409,8 @@ void IntersectionModuleManager::sendRTC(const Time & stamp)
     const auto occlusion_distance = intersection_module->getOcclusionDistance();
     const auto occlusion_safety = intersection_module->getOcclusionSafety();
     occlusion_rtc_interface_.updateCooperateStatus(
-      occlusion_uuid, occlusion_safety, occlusion_distance, occlusion_distance, stamp);
+      occlusion_uuid, occlusion_safety, State::RUNNING, occlusion_distance, occlusion_distance,
+      stamp);
 
     // ==========================================================================================
     // module debug data
