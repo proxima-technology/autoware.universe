@@ -117,7 +117,6 @@ BehaviorModuleOutput LaneChangeInterface::plan()
   updateSteeringFactorPtr(output);
   if (module_type_->isAbortState()) {
     waitApproval();
-    removeRTCStatus();
     const auto candidate = planCandidate();
     path_candidate_ = std::make_shared<PathWithLaneId>(candidate.path_candidate);
     updateRTCStatus(
@@ -147,7 +146,6 @@ BehaviorModuleOutput LaneChangeInterface::planWaitingApproval()
   stop_pose_ = module_type_->getStopPose();
 
   if (!module_type_->isValidPath()) {
-    removeRTCStatus();
     path_candidate_ = std::make_shared<PathWithLaneId>();
     return out;
   }

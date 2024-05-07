@@ -365,7 +365,6 @@ private:
     if (!path_shifter_.getShiftLines().empty()) {
       left_shift_array_.clear();
       right_shift_array_.clear();
-      removeRTCStatus();
     }
 
     generator_.reset();

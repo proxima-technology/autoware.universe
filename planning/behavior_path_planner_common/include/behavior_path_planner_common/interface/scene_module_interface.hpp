@@ -187,7 +187,6 @@ public:
     RCLCPP_DEBUG(getLogger(), "%s %s", name_.c_str(), __func__);
 
     clearWaitingApproval();
-    removeRTCStatus();
     unlockNewModuleLaunch();
     unlockOutputPath();
     steering_factor_interface_ptr_->clearSteeringFactors();
@@ -525,15 +524,6 @@ protected:
       return false;
     }
     return existApprovedRequest();
-  }
-
-  void removeRTCStatus()
-  {
-    for (const auto & [module_name, ptr] : rtc_interface_ptr_map_) {
-      if (ptr) {
-        ptr->clearCooperateStatus();
-      }
-    }
   }
 
   void setStopReason(const std::string & stop_reason, const PathWithLaneId & path)
