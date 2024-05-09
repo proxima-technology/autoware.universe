@@ -23,7 +23,7 @@
         check_yaw_deviation: true
         check_predicted_path_deviation: true
         check_yaw_rate: true
-        check_total_objects_count: true
+        check_total_objects_count: false
         check_average_objects_count: false
         check_interval_average_objects_count: false
       truck:
@@ -31,7 +31,7 @@
         check_yaw_deviation: true
         check_predicted_path_deviation: true
         check_yaw_rate: true
-        check_total_objects_count: true
+        check_total_objects_count: false
         check_average_objects_count: false
         check_interval_average_objects_count: false
       bus:
@@ -39,7 +39,7 @@
         check_yaw_deviation: true
         check_predicted_path_deviation: true
         check_yaw_rate: true
-        check_total_objects_count: true
+        check_total_objects_count: false
         check_average_objects_count: false
         check_interval_average_objects_count: false
       trailer:
@@ -47,7 +47,7 @@
         check_yaw_deviation: true
         check_predicted_path_deviation: true
         check_yaw_rate: true
-        check_total_objects_count: true
+        check_total_objects_count: false
         check_average_objects_count: false
         check_interval_average_objects_count: false
       bicycle:
@@ -55,7 +55,7 @@
         check_yaw_deviation: true
         check_predicted_path_deviation: true
         check_yaw_rate: true
-        check_total_objects_count: true
+        check_total_objects_count: false
         check_average_objects_count: false
         check_interval_average_objects_count: false
       motorcycle:
@@ -63,7 +63,7 @@
         check_yaw_deviation: true
         check_predicted_path_deviation: true
         check_yaw_rate: true
-        check_total_objects_count: true
+        check_total_objects_count: false
         check_average_objects_count: false
         check_interval_average_objects_count: false
       pedestrian:
@@ -71,7 +71,7 @@
         check_yaw_deviation: true
         check_predicted_path_deviation: true
         check_yaw_rate: true
-        check_total_objects_count: true
+        check_total_objects_count: false
         check_average_objects_count: false
         check_interval_average_objects_count: false
       unknown:
