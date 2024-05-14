@@ -1607,7 +1607,8 @@ void AvoidanceModule::insertWaitPoint(
     getEgoPosition(), stop_distance, 0.0, shifted_path.path, stop_pose_);
 }
 
-void AvoidanceModule::insertStopPoint(
+// kato 読みました
+void AvoidanceModule::insertStopPoint( 
   const bool use_constraints_for_decel, ShiftedPath & shifted_path) const
 {
   const auto & data = avoid_data_;
