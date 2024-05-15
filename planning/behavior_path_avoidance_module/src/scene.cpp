@@ -709,6 +709,12 @@ void AvoidanceModule::updateEgoBehavior(const AvoidancePlanningData & data, Shif
   insertPrepareVelocity(path);
   insertAvoidanceVelocity(path);
 
+  /* kato
+  Egoの状態に応じてinsertStopPointを挿入するか、insertWaitPointを挿入するかが変わる。
+  状態に応じてどれか一つが実行される。
+  ただし、それぞれのPointを挿入したとしてもそこでinsertDeceiPoint(utils.cpp, つまり停止箇所)
+  が挿入されるかは各Pointでの条件分岐による。
+  */
   switch (data.state) {
     case AvoidanceState::NOT_AVOID: {
       break;
@@ -733,6 +739,12 @@ void AvoidanceModule::updateEgoBehavior(const AvoidancePlanningData & data, Shif
       throw std::domain_error("invalid behavior");
   }
 
+  /* kato
+  パスをシフトしたときに戻ろうとする関数
+  insertReturnDeadLineにもinsertDecelPointを挿入する関数があり、
+  behavior_path_planner/avoidance/avoidance.param.yamlにある
+  return_dead_line: goal: enable: の値がtrueの場合はここでavoidanceの停止線が挿入され止まっていた。
+  */ 
   insertReturnDeadLine(isBestEffort(parameters_->policy_deceleration), path);
 
   setStopReason(StopReason::AVOIDANCE, path.path);
@@ -1483,22 +1495,39 @@ double AvoidanceModule::calcDistanceToStopLine(const ObjectData & object) const
            p->stop_max_distance);
 }
 
+/* kato
+Egoの状態に関わらず呼び出される関数。
+パスをシフトさせた際に、戻ることができないと判断されたら停止点を入れる。
+*/
 void AvoidanceModule::insertReturnDeadLine(
   const bool use_constraints_for_decel, ShiftedPath & shifted_path) const
 {
   const auto & data = avoid_data_;
 
+  /* kato
+  behavior_path_planner/avoidance/avoidance.param.yamlにある
+  return_dead_line: goal: enable: の値がtrueの場合、
+  ゴール近くで障害物を避けて道をシフトすると以下の条件を満たさない。
+  falseにするとdata.to_return_pointはC++の最も大きい数となるので、
+  以下は必ず満たしてこの関数を終了する。
+  */
   if (data.to_return_point > planner_data_->parameters.forward_path_length) {
     RCLCPP_DEBUG(getLogger(), "return dead line is far enough.");
     return;
   }
 
+  /* kato
+  パスのシフトが小さい場合も関数を終了する。
+  */
   const auto shift_length = path_shifter_.getLastShiftLength();
 
   if (std::abs(shift_length) < 1e-3) {
     RCLCPP_DEBUG(getLogger(), "don't have to consider return shift.");
     return;
   }
+  /* kato
+  この2条件が満たされなかった場合は色々書いてあるが、結局は停止する（はず）。
+  */
 
   // Consider the difference in path length between the shifted path and original path (the path
   // that is shifted inward has a shorter distance to the end of the path than the other one.)
@@ -1511,6 +1540,9 @@ void AvoidanceModule::insertReturnDeadLine(
     helper_->getMinAvoidanceDistance(shift_length) + helper_->getMinimumPrepareDistance();
   const auto to_stop_line = data.to_return_point - min_return_distance - buffer;
 
+  /* kato
+  我々の環境ではここで関数が終わる。
+  */
   // If we don't need to consider deceleration constraints, insert a deceleration point
   // and return immediately
   if (!use_constraints_for_decel) {
@@ -1607,20 +1639,37 @@ void AvoidanceModule::insertWaitPoint(
     getEgoPosition(), stop_distance, 0.0, shifted_path.path, stop_pose_);
 }
 
-// kato 読みました
+/* kato
+Egoの状態がAVOID_EXECUTEのときの呼び出される関数
+目的としては安全でないと判断されたときに停止点を入れる。
+*/
 void AvoidanceModule::insertStopPoint( 
   const bool use_constraints_for_decel, ShiftedPath & shifted_path) const
 {
+  /* kato
+  data = avoid_data_がsafeであればこの関数は抜ける。
+  回避が実行され、安全なパスを取れるときはdata.safe = trueとなるはず。
+  この中身までは未確認。
+  */
   const auto & data = avoid_data_;
 
   if (data.safe) {
     return;
   }
-
+  /* kato
+  ここについては理解していない
+  */
   if (!parameters_->enable_yield_maneuver_during_shifting) {
     return;
   }
+  /* kato 
+  ここまでの条件でreturnしなかった場合は停止するようになっている。
+  */
 
+  /* kato
+  Egoがレーンを外れたと推測されたときにstop_idxにはそのidx (正確にはidx-1)が入る。
+  外れないなら一番最後のidxが入る。
+  */
   const auto stop_idx = [&]() {
     const auto ego_idx = planner_data_->findEgoIndex(shifted_path.path.points);
     for (size_t idx = ego_idx; idx < shifted_path.path.points.size(); ++idx) {
@@ -1634,9 +1683,20 @@ void AvoidanceModule::insertStopPoint(
     return shifted_path.path.points.size() - 1;
   }();
 
+  /* kato
+  停止する位置を計算。
+  中身については追っていない。
+  */
   const auto stop_distance =
     calcSignedArcLength(shifted_path.path.points, getEgoPosition(), stop_idx);
 
+  /* kato
+  以下、条件で分岐させながら停止点を挿入する。
+  */
+  /* kato
+  おそらく我々が実行する環境では !use_constraints_for_decel = true となるので
+  以下のif文の中のコードでこの関数は終了する。
+  */
   // If we don't need to consider deceleration constraints, insert a deceleration point
   // and return immediately
   if (!use_constraints_for_decel) {
@@ -1645,6 +1705,9 @@ void AvoidanceModule::insertStopPoint(
     return;
   }
 
+  /* kato
+  減速制約を考慮する場合については理解していない。
+  */
   // Otherwise, consider deceleration constraints before inserting deceleration point
   const auto decel_distance = helper_->getFeasibleDecelDistance(0.0, false);
   if (stop_distance < decel_distance) {

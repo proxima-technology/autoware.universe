@@ -1362,6 +1362,11 @@ lanelet::ConstLanelets getExtendLanes(
   return extend_lanelets;
 }
 
+/* kato
+目標の速度に減速させる関数だと認識している。
+大抵の場合は0.0に減速 (つまり停止) のために使われている？
+p_outがstop_pose_に対応する。
+*/
 void insertDecelPoint(
   const Point & p_src, const double offset, const double velocity, PathWithLaneId & path,
   std::optional<Pose> & p_out)
@@ -1390,6 +1395,10 @@ void insertDecelPoint(
 
   insertVelocity(path, velocity);
 
+  /* kato 
+  p_outの出力についてはp_out->position.x, p_out->position.y, p_out->position.z, 
+  のようにすると座標の情報を取り出せる。
+  */
   p_out = getPose(path.points.at(insert_idx.value()));
 }
 
