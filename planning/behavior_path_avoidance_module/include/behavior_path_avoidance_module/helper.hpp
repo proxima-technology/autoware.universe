@@ -103,6 +103,9 @@ public:
     return std::max(getEgoSpeed(), values.at(idx));
   }
 
+  //* 1. 現在の速度(twist.linear.x)とシフトのための準備時間の積
+  //* 2. シフトのための準備距離
+  //* 1,2の内大きい方の距離を返す
   double getMinimumPrepareDistance() const
   {
     const auto & p = parameters_;

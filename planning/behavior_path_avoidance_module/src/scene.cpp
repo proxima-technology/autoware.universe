@@ -350,6 +350,7 @@ void AvoidanceModule::fillAvoidanceTargetObjects(
   using utils::avoidance::updateRoadShoulderDistance;
 
   // Separate dynamic objects based on whether they are inside or outside of the expanded lanelets.
+  //* 障害物をplanner dataから取得して参照軌道と交差するかどうかで二種類に分ける.
   constexpr double MARGIN = 10.0;
   const auto forward_detection_range = helper_->getForwardDetectionRange();
   const auto [object_within_target_lane, object_outside_target_lane] = separateObjectsByPath(
@@ -442,15 +443,21 @@ ObjectData AvoidanceModule::createObjectData(
   return object_data;
 }
 
+//* Yield Modeに移行可能かを判定
 bool AvoidanceModule::canYieldManeuver(const AvoidancePlanningData & data) const
 {
   // transit yield maneuver only when the avoidance maneuver is not initiated.
+  //* 前回のシフトパスと参照経路から現在のシフト長を計算し、
+  //* thresold(0.1m)より大きければ移行不可.
   if (helper_->isShifted()) {
     RCLCPP_DEBUG(getLogger(), "avoidance maneuver already initiated.");
     return false;
   }
 
   // prevent sudden steering.
+  //* shift_lines_を取得.
+  //* シフト開始までの距離と準備に必要な距離を比較して
+  //* シフトが間に合わなければ移行不可
   const auto registered_lines = path_shifter_.getShiftLines();
   if (!registered_lines.empty()) {
     const size_t idx = planner_data_->findEgoIndex(path_shifter_.getReferencePath().points);
@@ -465,11 +472,14 @@ bool AvoidanceModule::canYieldManeuver(const AvoidancePlanningData & data) const
     }
   }
 
+  //* 標的障害物が存在しなければ移行可能
+  //* この情報はfillEgoStatusで得る
   if (!data.stop_target_object) {
     RCLCPP_DEBUG(getLogger(), "can pass by the object safely without avoidance maneuver.");
     return true;
   }
 
+  //* 標的障害物に対して既に停止を開始したかを計算
   constexpr double TH_STOP_SPEED = 0.01;
   constexpr double TH_STOP_POSITION = 0.5;
 
@@ -482,15 +492,19 @@ bool AvoidanceModule::canYieldManeuver(const AvoidancePlanningData & data) const
     [&id](const auto & o) { return o.object.object_id == id; });
 
   // if the ego already started avoiding for the object, never transit yield maneuver again.
+  //* 停止開始済み障害物と記録がない場合
+  //* 停止開始済みならYIELD移行可能、シフトするなら移行不可
   if (same_id_obj != ego_stopped_objects_.end()) {
     return stopped_for_the_object;
   }
 
   // registered objects whom the ego stopped for at the moment of stopping.
+  //* 停止開始済み障害物を記録
   if (stopped_for_the_object) {
     ego_stopped_objects_.push_back(data.stop_target_object.value());
   }
 
+  //* 停止開始済みなためYIELD移行可能
   return true;
 }
 
@@ -547,8 +561,12 @@ void AvoidanceModule::fillShiftLine(AvoidancePlanningData & data, DebugData & de
 void AvoidanceModule::fillEgoStatus(
   AvoidancePlanningData & data, [[maybe_unused]] DebugData & debug) const
 {
+  //* 何に対するSUCCESS Conditionなのか分からない
+  //* 標的障害物で回避可能なものがあればfalse
   data.success = isSatisfiedSuccessCondition(data);
 
+  //* 回避可能or回避不能理由がTOO_LARGE_JERKの場合のオブジェクトで自車からの距離が
+  //* 最も近いものを見つけ記録する.
   /**
    * Find the nearest object that should be avoid. When the ego follows reference path,
    * if the both of following two conditions are satisfied, the module surely avoid the object.
@@ -1304,6 +1322,8 @@ void AvoidanceModule::updateData()
   avoid_data_ = AvoidancePlanningData();
 
   // update base path and target objects.
+  //* 基本的なデータを取得する.
+  //* レーン、走行可能領域、障害物の情報を計算する.
   fillFundamentalData(avoid_data_, debug_data_);
 
   // an empty path will kill further processing

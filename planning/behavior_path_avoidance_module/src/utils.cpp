@@ -159,6 +159,12 @@ double calcSignedArcLengthToFirstNearestPoint(
   return signed_length_on_traj - signed_length_src_offset + signed_length_dst_offset;
 }
 
+//* 車がx軸を向いたときの前ミラーから最後部までを囲むポリゴンをy軸の余白を入れて生成する.
+//* Vehicle Infoは以下のドキュメント参照
+//* vehicle_width, rear_overhang:
+//* https://autowarefoundation.github.io/autoware-documentation/main/design/autoware-interfaces/components/vehicle-dimensions/#vehicle-dimensions_1
+//* max_longitudinal_offset:
+//* https://autowarefoundation.github.io/autoware-documentation/main/how-to-guides/integrating-autoware/creating-vehicle-and-sensor-model/creating-vehicle-model/#mirrorparamyaml
 geometry_msgs::msg::Polygon createVehiclePolygon(
   const vehicle_info_util::VehicleInfo & vehicle_info, const double offset)
 {
@@ -2070,6 +2076,7 @@ std::vector<ExtendedPredictedObject> getSafetyCheckTargetObjects(
   return target_objects;
 }
 
+//* 障害物を横オフセット込みで参照軌道上の車と交差するかを元に選り分ける.
 std::pair<PredictedObjects, PredictedObjects> separateObjectsByPath(
   const PathWithLaneId & reference_path, const PathWithLaneId & spline_path,
   const std::shared_ptr<const PlannerData> & planner_data, const AvoidancePlanningData & data,
@@ -2079,12 +2086,21 @@ std::pair<PredictedObjects, PredictedObjects> separateObjectsByPath(
   PredictedObjects target_objects;
   PredictedObjects other_objects;
 
+  //* 参照経路が空なら返る
   if (reference_path.points.empty() || spline_path.points.empty()) {
     return std::make_pair(target_objects, other_objects);
   }
 
+  //* 障害物ごとのパラメータからmax_offsetを計算する.
+  //* object_parameters:
+  //*             car., bus. 等について車両の種類ごとの別々の値
+  //*             lateral_margin (soft, hard, hard_for_pv(parked_vehicle))
+  //*             envelope_buffer_margin
+  //*             など
   double max_offset = 0.0;
   for (const auto & object_parameter : parameters->object_parameters) {
+    //* object_parametersの型はstd::pair<const uint8_t, ObjectParameter>で、
+    //* object_parameter.second でパラメータの部分を取り出す.
     const auto p = object_parameter.second;
     const auto lateral_hard_margin =
       std::max(p.lateral_hard_margin, p.lateral_hard_margin_for_parked_vehicle);
@@ -2093,6 +2109,7 @@ std::pair<PredictedObjects, PredictedObjects> separateObjectsByPath(
     max_offset = std::max(max_offset, offset);
   }
 
+  //* 障害物の探知領域を、参照経路とワンステップの車のポリゴンから生成
   const auto detection_area =
     createVehiclePolygon(planner_data->parameters.vehicle_info, max_offset);
   const auto ego_idx = planner_data->findEgoIndex(reference_path.points);
@@ -2128,10 +2145,12 @@ std::pair<PredictedObjects, PredictedObjects> separateObjectsByPath(
     next_longitudinal_distance += parameters->resample_interval_for_output;
   }
 
+  //* デバッグ用
   std::for_each(detection_areas.begin(), detection_areas.end(), [&](const auto & detection_area) {
     debug.detection_areas.push_back(toMsg(detection_area, data.reference_pose.position.z));
   });
 
+  //* 探知領域と障害物の交差判定に用いる関数.
   const auto within_detection_area = [&](const auto & obj_polygon) {
     for (const auto & detection_area : detection_areas) {
       if (!boost::geometry::disjoint(obj_polygon, detection_area)) {
@@ -2142,6 +2161,7 @@ std::pair<PredictedObjects, PredictedObjects> separateObjectsByPath(
     return false;
   };
 
+  //* 障害物を分類.
   const auto objects = planner_data->dynamic_object->objects;
   std::for_each(objects.begin(), objects.end(), [&](const auto & object) {
     const auto obj_polygon = tier4_autoware_utils::toPolygon2d(object);
