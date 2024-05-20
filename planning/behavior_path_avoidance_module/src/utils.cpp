@@ -829,6 +829,7 @@ bool isSatisfiedWithVehicleCondition(
 
   // from here, filtering for ambiguous vehicle.
 
+  // Ohga NOTE: enable_avoidance_for_ambiguous_vehicle is "avoidance_for_ambiguous_vehicle.enable" in avoidance.param.yaml
   if (!parameters->enable_avoidance_for_ambiguous_vehicle) {
     object.reason = "AmbiguousStoppedVehicle";
     return false;
@@ -879,6 +880,11 @@ bool isNoNeedAvoidanceBehavior(
 
   const auto shift_length = calcShiftLength(
     isOnRight(object), object.overhang_points.front().first, object.avoid_margin.value());
+  // Ohga NOTE: avoidance.param.yamlのhard_margine_for_parked_vehicleを増加させると，
+  //            object.avoid_margin.value()が増加するため，
+  //            isOnRight == True: shift_lengthが増加する．
+  //            isOnRight == False: shift_lengthが減少する．
+  //            isOnRightは障害物が右側にあるかどうかを示す．
   if (!isShiftNecessary(isOnRight(object), shift_length)) {
     object.reason = "NotNeedAvoidance";
     return true;
@@ -1055,9 +1061,10 @@ bool isWithinLanes(
 bool isShiftNecessary(const bool & is_object_on_right, const double & shift_length)
 {
   /**
+   *   y, lateral direction
    *   ^
    *   |
-   * --+----x-------------------------------x--->
+   * --+----x-------------------------------x---> x, longitunal direction
    *   |                 x     x
    *   |                 ==obj==
    */
@@ -1066,9 +1073,10 @@ bool isShiftNecessary(const bool & is_object_on_right, const double & shift_leng
   }
 
   /**
+   *   y, lateral direction
    *   ^                 ==obj==
    *   |                 x     x
-   * --+----x-------------------------------x--->
+   * --+----x-------------------------------x---> x, longitunal direction
    *   |
    */
   if (!is_object_on_right && shift_length > 0.0) {
@@ -1733,6 +1741,9 @@ void filterTargetObjects(
     data.target_objects.push_back(object);
   };
 
+  // Ohga NOTE: target_object is need to avoid.
+  //            other_object is not need to avoid.
+  //            see https://github.com/autowarefoundation/autoware.universe/blob/173aae41067941574d4a70a74f5afb09ce54eb44/planning/behavior_path_avoidance_module/README.md#L4
   for (auto & o : objects) {
     if (!filtering_utils::isSatisfiedWithCommonCondition(
           o, data, forward_detection_range, planner_data, parameters)) {

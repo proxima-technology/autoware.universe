@@ -130,6 +130,7 @@ bool isLeft(const geometry_msgs::msg::Pose & pose, const geometry_msgs::msg::Poi
 }
 
 // NOTE: Regarding boundary's sign, left is positive, and right is negative
+// Ohga NOTE: this is used to calculate dist_to_left_bound and dist_to_right_bound
 double calcLateralDistToBounds(
   const geometry_msgs::msg::Pose & pose, const std::vector<geometry_msgs::msg::Point> & bound,
   const double additional_offset, const bool is_left_bound = true)
@@ -137,6 +138,13 @@ double calcLateralDistToBounds(
   constexpr double max_lat_offset_for_left = 5.0;
   constexpr double min_lat_offset_for_left = -5.0;
 
+  // Ohga NOTE:
+  //   left case:
+  //     max_lat_offset = max_lat_offset_for_left
+  //     min_lat_offset = min_lat_offset_for_left
+  //   right case:
+  //     max_lat_offset = -max_lat_offset_for_left
+  //     min_lat_offset = -min_lat_offset_for_left
   const double max_lat_offset = is_left_bound ? max_lat_offset_for_left : -max_lat_offset_for_left;
   const double min_lat_offset = is_left_bound ? min_lat_offset_for_left : -min_lat_offset_for_left;
   const auto max_lat_offset_point =
@@ -195,8 +203,11 @@ MPTOptimizer::MPTParam::MPTParam(
     vehicle_info.wheel_base_m * default_wheel_base_ratio);
 
   {  // clearance
+    // Ohga NOTE: not used in this file.
     hard_clearance_from_road =
       node->declare_parameter<double>("mpt.clearance.hard_clearance_from_road");
+    // Ohga NOTE: dist_to_left_bound -= soft_clearance_from_road
+    //            dist_to_right_bound += soft_clearance_from_road
     soft_clearance_from_road =
       node->declare_parameter<double>("mpt.clearance.soft_clearance_from_road");
   }
@@ -805,10 +816,21 @@ void MPTOptimizer::updateBounds(
     static_cast<size_t>(std::ceil(1.0 / mpt_param_.delta_arc_length)), ref_points.size() - 1);
   for (size_t i = 0; i < ref_points.size(); ++i) {
     const auto ref_point_for_bound_search = ref_points.at(std::max(min_ref_point_index, i));
+    // Ohga NOTE: longitudinal axis is x-axis, positive direction is forward
+    //            So, lateral is y-axis,
+    //            left direction is positive direction of y-axis
+    //            right direction is negative direction of y-axis
+    //            dist_to_left_bound and dist_to_right_bound is y-axis value
+    //            dist_to_left_bound = bound - soft_road_clearance
+    //            dist_to_right_bound = bound + soft_road_clearance
+    //            |dist_to_left_bound - dist_to_right_bound| は 2 * soft_road_clearance だけ減少する
     const double dist_to_left_bound = calcLateralDistToBounds(
       ref_point_for_bound_search.pose, left_bound, soft_road_clearance, true);
     const double dist_to_right_bound = calcLateralDistToBounds(
       ref_point_for_bound_search.pose, right_bound, soft_road_clearance, false);
+    // Ohga NOTE: lower_bound <- dist_to_right_bound
+    //            upper_bound <- dist_to_left_bound
+    //            see ../include/obstacle_avoidance_planner/mpt_optimizer.hpp
     ref_points.at(i).bounds = Bounds{dist_to_right_bound, dist_to_left_bound};
   }
 
@@ -816,9 +838,13 @@ void MPTOptimizer::updateBounds(
   // NOTE: The drivable area's width is sometimes narrower than the vehicle width which means
   // infeasible to run especially when obstacles are extracted from the drivable area.
   //       In this case, the drivable area's width is forced to be wider.
+  // Ohga NOTE: see https://autowarefoundation.github.io/autoware.universe/main/planning/obstacle_avoidance_planner/docs/mpt/#collision-free:~:text=weights%20are%20modified.-,Keep%20minimum%20boundary%20width,%23,-The%20drivable%20area%27s
+  //            道が狭く（lower_boundとupper_boundの幅が狭く）両方にはみ出す場合，はみ出す場合，はみ出す長さが最小になるように，
+  //            （（直線の場合は？）両方に均等にはみ出すようにする）
   keepMinimumBoundsWidth(ref_points);
 
   // extend violated bounds, where the input path is outside the drivable area
+  // Ohga NOTE see https://autowarefoundation.github.io/autoware.universe/main/planning/obstacle_avoidance_planner/docs/mpt/#collision-free:~:text=%23-,%E6%80%A5%E3%83%8F%E3%83%B3%E3%83%89%E3%83%AB%E3%82%92%E9%81%BF%E3%81%91%E3%82%8B,%23,-%E8%A1%8C%E5%8B%95%E3%83%A2%E3%82%B8%E3%83%A5%E3%83%BC%E3%83%AB%E3%81%8C
   ref_points = extendViolatedBounds(ref_points);
 
   // keep previous boundary's width around ego to avoid sudden steering
@@ -845,6 +871,9 @@ void MPTOptimizer::updateBounds(
   return;
 }
 
+// Ohga NOTE: see https://autowarefoundation.github.io/autoware.universe/main/planning/obstacle_avoidance_planner/docs/mpt/#collision-free:~:text=weights%20are%20modified.-,Keep%20minimum%20boundary%20width,%23,-The%20drivable%20area%27s
+//            道が狭く（lower_boundとupper_boundの幅が狭く）両方にはみ出す場合，はみ出す場合，はみ出す長さが最小になるように，
+//            （（直線の場合は？）両方に均等にはみ出すようにする）
 void MPTOptimizer::keepMinimumBoundsWidth(std::vector<ReferencePoint> & ref_points) const
 {
   // calculate drivable area width considering the curvature
@@ -875,6 +904,7 @@ void MPTOptimizer::keepMinimumBoundsWidth(std::vector<ReferencePoint> & ref_poin
   std::optional<size_t> out_of_upper_bound_start_idx = std::nullopt;
   std::optional<size_t> out_of_lower_bound_start_idx = std::nullopt;
   for (size_t i = 0; i < ref_points.size(); ++i) {
+    // Ohga NOTE: ref_points.at(i).boundsをbと置き換えている．（bを変更するともとのref_points.at(i).boundsも変更される．）
     const auto & b = ref_points.at(i).bounds;
 
     // const double drivable_width = b.upper_bound - b.lower_bound;
@@ -1022,6 +1052,7 @@ void MPTOptimizer::keepMinimumBoundsWidth(std::vector<ReferencePoint> & ref_poin
   }
 }
 
+// Ohga NOTE see https://autowarefoundation.github.io/autoware.universe/main/planning/obstacle_avoidance_planner/docs/mpt/#collision-free:~:text=%23-,%E6%80%A5%E3%83%8F%E3%83%B3%E3%83%89%E3%83%AB%E3%82%92%E9%81%BF%E3%81%91%E3%82%8B,%23,-%E8%A1%8C%E5%8B%95%E3%83%A2%E3%82%B8%E3%83%A5%E3%83%BC%E3%83%AB%E3%81%8C
 std::vector<ReferencePoint> MPTOptimizer::extendViolatedBounds(
   const std::vector<ReferencePoint> & ref_points) const
 {

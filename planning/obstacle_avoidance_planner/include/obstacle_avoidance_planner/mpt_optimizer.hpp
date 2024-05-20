@@ -66,6 +66,8 @@ struct KinematicState
   Eigen::Vector2d toEigenVector() const { return Eigen::Vector2d{lat, yaw}; }
 };
 
+// Ohga NOTE: 参照軌道の各点を表す構造体
+//            indexが増加するにについれて，前方へ進む
 struct ReferencePoint
 {
   geometry_msgs::msg::Pose pose;
