@@ -159,7 +159,9 @@ double calcSignedArcLengthToFirstNearestPoint(
   return signed_length_on_traj - signed_length_src_offset + signed_length_dst_offset;
 }
 
-//* 車がx軸を向いたときの前ミラーから最後部までを囲むポリゴンをy軸の余白を入れて生成する.
+//* 車がx軸を向いた状態の
+//* 前ミラーから最後部までを囲むポリゴンを生成する.
+//* offset=y軸の余白を含める.
 //* Vehicle Infoは以下のドキュメント参照
 //* vehicle_width, rear_overhang:
 //* https://autowarefoundation.github.io/autoware-documentation/main/design/autoware-interfaces/components/vehicle-dimensions/#vehicle-dimensions_1
@@ -183,6 +185,9 @@ geometry_msgs::msg::Polygon createVehiclePolygon(
   return polygon;
 }
 
+
+//* ワンステップのポリゴンを作成.
+//* ４点の位置でのポリゴンを合わせた後に凸包を取る.
 Polygon2d createOneStepPolygon(
   const geometry_msgs::msg::Pose & p1, const geometry_msgs::msg::Pose & p2,
   const geometry_msgs::msg::Pose & p3, const geometry_msgs::msg::Pose & p4,
@@ -725,22 +730,27 @@ bool isObviousAvoidanceTarget(
 }
 
 bool isSatisfiedWithCommonCondition(
-  ObjectData & object, const AvoidancePlanningData & data, const double forward_detection_range,
+  ObjectData & object,
+  const AvoidancePlanningData & data,
+  const double forward_detection_range,
   const std::shared_ptr<const PlannerData> & planner_data,
   const std::shared_ptr<AvoidanceParameters> & parameters)
 {
+  //* 障害物のタイプで回避対象か判別
   // Step1. filtered by target object type.
   if (!isAvoidanceTargetObjectType(object.object, parameters)) {
     object.reason = AvoidanceDebugFactor::OBJECT_IS_NOT_TYPE;
     return false;
   }
 
+  //* 動いている障害物であれば回避の対象外
   // Step2. filtered stopped objects.
   if (filtering_utils::isMovingObject(object, parameters)) {
     object.reason = AvoidanceDebugFactor::MOVING_OBJECT;
     return false;
   }
 
+  //* 障害物の縦距離と長さを計算する.
   // Step3. filtered by longitudinal distance.
   const auto & ego_pos = planner_data->self_odometry->pose.pose.position;
   fillLongitudinalAndLengthByClosestEnvelopeFootprint(data.reference_path_rough, ego_pos, object);
@@ -1231,6 +1241,7 @@ void setStartData(
   ap.start_longitudinal = start_dist;
 }
 
+//* 障害物を囲むポリゴンを作成する.
 Polygon2d createEnvelopePolygon(
   const Polygon2d & object_polygon, const Pose & closest_pose, const double envelope_buffer)
 {
@@ -1250,17 +1261,20 @@ Polygon2d createEnvelopePolygon(
     return ret;
   };
 
+  //* closest_poseにノイズが乗っていた場合に対応してロールとピッチを0に初期化(?)
   Pose pose_2d = closest_pose;
   pose_2d.orientation = createQuaternionFromRPY(0.0, 0.0, tf2::getYaw(closest_pose.orientation));
 
+  //* PoseをTransformに変換する.
   TransformStamped geometry_tf{};
   geometry_tf.transform = pose2transform(pose_2d);
-
+  //* 逆変換のTransformを用意する.
   tf2::Transform tf;
   tf2::fromMsg(geometry_tf.transform, tf);
   TransformStamped inverse_geometry_tf{};
   inverse_geometry_tf.transform = tf2::toMsg(tf.inverse());
 
+  //* 
   geometry_msgs::msg::Polygon out_ros_polygon{};
   tf2::doTransform(
     toMsg(object_polygon, closest_pose.position.z), out_ros_polygon, inverse_geometry_tf);
@@ -1409,11 +1423,13 @@ void fillObjectEnvelopePolygon(
   const auto & envelope_buffer_margin =
     object_parameter.envelope_buffer_margin * object_data.distance_factor;
 
+  //* 過去に登録済みの障害物か調べる.
   const auto id = object_data.object.object_id;
   const auto same_id_obj = std::find_if(
     registered_objects.begin(), registered_objects.end(),
     [&id](const auto & o) { return o.object.object_id == id; });
 
+  //* 同一IDの障害物が見つからなかった場合、新たに封筒ポリゴンを作成する.
   if (same_id_obj == registered_objects.end()) {
     object_data.envelope_poly =
       createEnvelopePolygon(object_data, closest_pose, envelope_buffer_margin);
@@ -1725,7 +1741,9 @@ void updateRoadShoulderDistance(
 }
 
 void filterTargetObjects(
-  ObjectDataArray & objects, AvoidancePlanningData & data, const double forward_detection_range,
+  ObjectDataArray & objects,
+  AvoidancePlanningData & data,
+  const double forward_detection_range,
   const std::shared_ptr<const PlannerData> & planner_data,
   const std::shared_ptr<AvoidanceParameters> & parameters)
 {
@@ -1733,12 +1751,14 @@ void filterTargetObjects(
     return;
   }
 
+  //* 回避プランニングデータに標的障害物を追加する.
   const rclcpp::Time now = rclcpp::Clock(RCL_ROS_TIME).now();
   const auto push_target_object = [&data, &now](auto & object) {
     object.last_seen = now;
     data.target_objects.push_back(object);
   };
 
+  //* 
   for (auto & o : objects) {
     if (!filtering_utils::isSatisfiedWithCommonCondition(
           o, data, forward_detection_range, planner_data, parameters)) {
@@ -2076,7 +2096,7 @@ std::vector<ExtendedPredictedObject> getSafetyCheckTargetObjects(
   return target_objects;
 }
 
-//* 障害物を横オフセット込みで参照軌道上の車と交差するかを元に選り分ける.
+//* 障害物が参照軌道上の車と交差するかを元に分ける.
 std::pair<PredictedObjects, PredictedObjects> separateObjectsByPath(
   const PathWithLaneId & reference_path, const PathWithLaneId & spline_path,
   const std::shared_ptr<const PlannerData> & planner_data, const AvoidancePlanningData & data,
@@ -2109,7 +2129,8 @@ std::pair<PredictedObjects, PredictedObjects> separateObjectsByPath(
     max_offset = std::max(max_offset, offset);
   }
 
-  //* 障害物の探知領域を、参照経路とワンステップの車のポリゴンから生成
+  //* 障害物の探知領域を、参照経路とワンステップの車のポリゴンから生成していく.
+  //* ワンステップのポリゴン
   const auto detection_area =
     createVehiclePolygon(planner_data->parameters.vehicle_info, max_offset);
   const auto ego_idx = planner_data->findEgoIndex(reference_path.points);
@@ -2135,10 +2156,12 @@ std::pair<PredictedObjects, PredictedObjects> separateObjectsByPath(
     const auto & p_reference_ego_back = reference_path.points.at(i).point.pose;
     const auto & p_spline_ego_back = spline_path.points.at(i).point.pose;
 
+    //* 参照経路とスプライン経路両方のワンステップ分を合わせた凸包を生成
     detection_areas.push_back(createOneStepPolygon(
       p_reference_ego_front, p_reference_ego_back, p_spline_ego_front, p_spline_ego_back,
       detection_area));
 
+    //* 次のステップのために値を更新
     p_reference_ego_front = p_reference_ego_back;
     p_spline_ego_front = p_spline_ego_back;
 

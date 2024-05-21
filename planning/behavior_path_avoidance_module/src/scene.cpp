@@ -368,6 +368,7 @@ void AvoidanceModule::fillAvoidanceTargetObjects(
     objects.push_back(createObjectData(data, object));
   }
 
+  //* 
   // Filter out the objects to determine the ones to be avoided.
   filterTargetObjects(objects, data, forward_detection_range, planner_data_, parameters_);
   updateRoadShoulderDistance(data, planner_data_, parameters_);
