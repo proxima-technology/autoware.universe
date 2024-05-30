@@ -1077,6 +1077,8 @@ PredictedObject MapBasedPredictionNode::getPredictedObjectAsCrosswalkUser(
     PredictedPath predicted_path = path_generator_->generatePathForNonVehicleObject(object);
     predicted_path.confidence = 1.0;
 
+    // Ohga NOTE: objectに対して，objectが一定速度で進んだ際のpathをpush_backする．
+    //            この際，pathがfenceと交差していないかは考慮していない．
     predicted_object.kinematics.predicted_paths.push_back(predicted_path);
   }
 
@@ -1087,6 +1089,8 @@ PredictedObject MapBasedPredictionNode::getPredictedObjectAsCrosswalkUser(
       break;
     }
   }
+
+  // Ohga NOTE: 以下，同じobjectに対して，追加でcrosswalkに関するpathをpush_backする．
 
   // If the object is in the crosswalk, generate path to the crosswalk edge
   if (crossing_crosswalk) {
